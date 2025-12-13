@@ -1,0 +1,60 @@
+# Viral Food Directory - Cursor AI Rules
+
+## Project Context
+Building a map-first viral food discovery app for Malaysia.
+Tech: Next.js 14 (App Router) + React + Tailwind CSS + Supabase + Google Maps API
+Deadline: Wednesday, Dec 17, 2025
+
+## Design System (ALWAYS FOLLOW)
+- Primary: Teal #0D9488 (teal-600)
+- Accent: Pink #EC4899 (pink-500) for viral/trending
+- Background: #FAFAF8 light, #0F172A dark
+- Border radius: rounded-2xl for cards, rounded-xl for buttons
+- Padding: minimum p-6 (24px) for cards
+- Shadows: shadow-sm default, shadow-md on hover
+- Animations: 300ms duration, ease-out
+- Font weights: 400, 500, 600, 700 only
+
+## Component Rules
+- Mobile-first responsive (base → md: → lg:)
+- TypeScript strict (no 'any')
+- Include loading states (skeleton preferred)
+- Include error handling
+- Dark mode support with dark: prefix
+
+## API Route Rules
+- All external API calls through /api routes
+- Cache responses (5 min restaurants, 1 hour trending)
+- Return format: { data, source: 'cache'|'database', count }
+- Handle errors with try/catch, return { error: string }
+
+## File Naming
+- Components: PascalCase (FoodMarker.tsx)
+- Routes: kebab-case (trending-dishes/route.ts)
+- Utilities: camelCase (calculateDistance.ts)
+
+## Folder Structure
+src/
+├── app/
+│   ├── api/
+│   │   ├── restaurants/route.ts
+│   │   ├── trending-dishes/route.ts
+│   │   └── reviews/route.ts
+│   ├── place/[id]/page.tsx
+│   ├── page.tsx
+│   ├── layout.tsx
+│   └── globals.css
+├── components/
+│   ├── Map.tsx
+│   ├── FoodMarker.tsx
+│   ├── RestaurantCard.tsx
+│   ├── FilterBar.tsx
+│   ├── TrendingDishes.tsx
+│   └── PlaceDetail.tsx
+├── lib/
+│   ├── supabase.ts
+│   └── utils.ts
+├── types/
+│   └── index.ts
+└── hooks/
+    └── useGeolocation.ts
