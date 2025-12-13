@@ -12,6 +12,7 @@ interface MapProps {
   selectedId: string | null;
   onSelectRestaurant: (id: string | null) => void;
   userLocation: { lat: number; lng: number } | null;
+  centerRestaurantId?: string | null;
 }
 
 const KUALA_LUMPUR_CENTER = { lat: 3.139, lng: 101.6869 };
@@ -37,6 +38,7 @@ export default function MapComponent({
   selectedId,
   onSelectRestaurant,
   userLocation,
+  centerRestaurantId,
 }: MapProps) {
   const router = useRouter();
   const [isMapLoaded, setIsMapLoaded] = useState(false);
@@ -53,8 +55,16 @@ export default function MapComponent({
     [restaurants, selectedId]
   );
 
-  // Determine map center
-  const mapCenter = userLocation || KUALA_LUMPUR_CENTER;
+  // Determine map center - prioritize centerRestaurantId, then userLocation, then default
+  const mapCenter = useMemo(() => {
+    if (centerRestaurantId) {
+      const restaurant = restaurants.find((r) => r.id === centerRestaurantId);
+      if (restaurant) {
+        return { lat: restaurant.lat, lng: restaurant.lng };
+      }
+    }
+    return userLocation || KUALA_LUMPUR_CENTER;
+  }, [centerRestaurantId, restaurants, userLocation]);
 
   // Handle marker click
   const handleMarkerClick = (id: string) => {
@@ -101,7 +111,7 @@ export default function MapComponent({
         <Map
           defaultCenter={KUALA_LUMPUR_CENTER}
           center={mapCenter}
-          defaultZoom={DEFAULT_ZOOM}
+          defaultZoom={centerRestaurantId ? 16 : DEFAULT_ZOOM}
           mapId="viral-food-map"
           disableDefaultUI={true}
           gestureHandling="greedy"
@@ -113,8 +123,8 @@ export default function MapComponent({
           {userLocation && (
             <AdvancedMarker position={userLocation}>
               <div className="relative">
-                {/* Pulse animation */}
-                <div className="absolute inset-0 animate-ping rounded-full bg-blue-500 opacity-75"></div>
+                {/* Pulse ring animation */}
+                <div className="absolute inset-0 pulse-ring rounded-full bg-blue-500"></div>
                 {/* Blue dot */}
                 <div className="relative h-4 w-4 rounded-full bg-blue-600 ring-2 ring-white"></div>
               </div>
