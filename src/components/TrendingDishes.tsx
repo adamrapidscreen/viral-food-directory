@@ -1,86 +1,256 @@
 'use client';
 
-import { Restaurant } from '@/types';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { TrendingDish, ApiResponse } from '@/types';
 import HalalBadge from './HalalBadge';
 
-interface TrendingDish {
-  id: string;
-  name: string;
-  description?: string;
-  imageUrl?: string;
-  restaurant: Restaurant;
-  viewCount?: number;
-  likeCount?: number;
-}
-
-interface TrendingDishesProps {
+interface TrendingDishesState {
   dishes: TrendingDish[];
+  loading: boolean;
+  error: string | null;
 }
 
-export default function TrendingDishes({ dishes }: TrendingDishesProps) {
-  if (dishes.length === 0) {
-    return null;
+export default function TrendingDishes() {
+  const router = useRouter();
+  const [state, setState] = useState<TrendingDishesState>({
+    dishes: [],
+    loading: true,
+    error: null,
+  });
+
+  const fetchTrendingDishes = async () => {
+    setState((prev) => ({ ...prev, loading: true, error: null }));
+    try {
+      const response = await fetch('/api/trending-dishes');
+      const data: ApiResponse<TrendingDish[]> = await response.json();
+
+      if (data.error) {
+        throw new Error(data.error);
+      }
+
+      setState({
+        dishes: data.data || [],
+        loading: false,
+        error: null,
+      });
+    } catch (err) {
+      setState({
+        dishes: [],
+        loading: false,
+        error: err instanceof Error ? err.message : 'Failed to load trending dishes',
+      });
+    }
+  };
+
+  useEffect(() => {
+    fetchTrendingDishes();
+  }, []);
+
+  const handleCardClick = (restaurantId: string) => {
+    router.push(`/place/${restaurantId}`);
+  };
+
+  const handleKeyDown = (
+    e: React.KeyboardEvent,
+    restaurantId: string
+  ) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      handleCardClick(restaurantId);
+    }
+  };
+
+  // Loading skeleton
+  if (state.loading) {
+    return (
+      <section className="px-4 py-6">
+        <div className="mb-6">
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+            🔥 Trending Now
+          </h2>
+          <p className="mt-1 text-xs uppercase tracking-widest text-gray-500 dark:text-gray-400">
+            Updated hourly
+          </p>
+        </div>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {[1, 2, 3].map((i) => (
+            <div
+              key={i}
+              className="animate-pulse overflow-hidden rounded-2xl bg-white shadow-sm dark:bg-slate-800"
+            >
+              <div className="h-40 w-full bg-gray-200 dark:bg-slate-700" />
+              <div className="p-4">
+                <div className="mb-2 h-5 w-3/4 rounded bg-gray-200 dark:bg-slate-700" />
+                <div className="mb-3 h-4 w-1/2 rounded bg-gray-200 dark:bg-slate-700" />
+                <div className="flex justify-between">
+                  <div className="h-4 w-20 rounded bg-gray-200 dark:bg-slate-700" />
+                  <div className="h-4 w-24 rounded bg-gray-200 dark:bg-slate-700" />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+    );
+  }
+
+  // Error state
+  if (state.error) {
+    return (
+      <section className="px-4 py-6">
+        <div className="mb-6">
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+            🔥 Trending Now
+          </h2>
+          <p className="mt-1 text-xs uppercase tracking-widest text-gray-500 dark:text-gray-400">
+            Updated hourly
+          </p>
+        </div>
+        <div className="rounded-2xl bg-red-50 p-6 text-center dark:bg-red-900/20">
+          <p className="mb-4 text-red-700 dark:text-red-300">{state.error}</p>
+          <button
+            onClick={fetchTrendingDishes}
+            className="rounded-xl bg-teal-600 px-6 py-2 text-sm font-semibold text-white transition-colors hover:bg-teal-700 dark:bg-teal-500 dark:hover:bg-teal-600"
+          >
+            Retry
+          </button>
+        </div>
+      </section>
+    );
+  }
+
+  // Empty state
+  if (state.dishes.length === 0) {
+    return (
+      <section className="px-4 py-6">
+        <div className="mb-6">
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+            🔥 Trending Now
+          </h2>
+          <p className="mt-1 text-xs uppercase tracking-widest text-gray-500 dark:text-gray-400">
+            Updated hourly
+          </p>
+        </div>
+        <div className="rounded-2xl bg-gray-50 p-8 text-center dark:bg-slate-800">
+          <p className="text-gray-600 dark:text-gray-400">
+            No trending dishes right now. Check back soon! 🍜
+          </p>
+        </div>
+      </section>
+    );
   }
 
   return (
-    <div className="rounded-2xl bg-white p-6 shadow-sm dark:bg-gray-800">
-      <h2 className="mb-4 text-xl font-bold text-gray-900 dark:text-gray-100">
-        🔥 Trending Dishes
-      </h2>
-      <div className="space-y-4">
-        {dishes.map((dish) => (
-          <div
+    <section className="px-4 py-6">
+      <div className="mb-6">
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+          🔥 Trending Now
+        </h2>
+        <p className="mt-1 text-xs uppercase tracking-widest text-gray-500 dark:text-gray-400">
+          Updated hourly
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {state.dishes.map((dish) => (
+          <DishCard
             key={dish.id}
-            className="rounded-xl border border-gray-200 p-4 transition-shadow duration-300 ease-out hover:shadow-md dark:border-gray-700"
-          >
-            {/* Dish Name */}
-            <h3 className="mb-2 text-lg font-semibold text-gray-900 dark:text-gray-100">
-              {dish.name}
-            </h3>
-
-            {/* Restaurant Name Row with Halal Status */}
-            <div className="mb-2 flex items-center gap-2">
-              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                {dish.restaurant.name}
-              </span>
-              <HalalBadge
-                isHalal={dish.restaurant.isHalal}
-                certNumber={dish.restaurant.halalCertNumber}
-              />
-            </div>
-
-            {/* Description */}
-            {dish.description && (
-              <p className="mb-2 text-sm text-gray-600 dark:text-gray-400">
-                {dish.description}
-              </p>
-            )}
-
-            {/* Stats */}
-            <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
-              {dish.viewCount !== undefined && (
-                <span>👁️ {dish.viewCount.toLocaleString()} views</span>
-              )}
-              {dish.likeCount !== undefined && (
-                <span>❤️ {dish.likeCount.toLocaleString()} likes</span>
-              )}
-              <span className="text-teal-600 dark:text-teal-400">
-                ⭐ {dish.restaurant.rating}
-              </span>
-            </div>
-
-            {/* Dish Image */}
-            {dish.imageUrl && (
-              <div className="mt-3 aspect-video w-full overflow-hidden rounded-lg">
-                <img
-                  src={dish.imageUrl}
-                  alt={dish.name}
-                  className="h-full w-full object-cover"
-                />
-              </div>
-            )}
-          </div>
+            dish={dish}
+            onClick={() => handleCardClick(dish.restaurantId)}
+            onKeyDown={(e) => handleKeyDown(e, dish.restaurantId)}
+          />
         ))}
+      </div>
+    </section>
+  );
+}
+
+// Separate component for dish card to handle image state
+function DishCard({
+  dish,
+  onClick,
+  onKeyDown,
+}: {
+  dish: TrendingDish;
+  onClick: () => void;
+  onKeyDown: (e: React.KeyboardEvent) => void;
+}) {
+  const [imageError, setImageError] = useState(false);
+  const [imageLoading, setImageLoading] = useState(true);
+
+  return (
+    <div
+      onClick={onClick}
+      onKeyDown={onKeyDown}
+      role="button"
+      tabIndex={0}
+      aria-label={`View ${dish.dishName} at ${dish.restaurantName || 'restaurant'}`}
+      className="group cursor-pointer overflow-hidden rounded-2xl bg-white shadow-sm transition-shadow hover:shadow-md dark:bg-slate-800"
+    >
+      {/* Image */}
+      <div className="relative h-40 w-full overflow-hidden">
+        {imageLoading && (
+          <div className="absolute inset-0 animate-pulse bg-gray-200 dark:bg-slate-700" />
+        )}
+        {dish.photoUrl && !imageError ? (
+          <img
+            src={dish.photoUrl}
+            alt={dish.dishName}
+            className="h-40 w-full object-cover transition-transform duration-300 group-hover:scale-105"
+            onLoad={() => setImageLoading(false)}
+            onError={() => {
+              setImageError(true);
+              setImageLoading(false);
+            }}
+          />
+        ) : (
+          <div className="flex h-40 w-full items-center justify-center bg-gray-100 text-5xl dark:bg-slate-700">
+            🍽️
+          </div>
+        )}
+      </div>
+
+      {/* Content */}
+      <div className="p-4">
+        {/* Dish name + Price */}
+        <div className="mb-2 flex items-start justify-between gap-2">
+          <h3 className="flex-1 text-lg font-semibold text-gray-900 dark:text-white">
+            {dish.dishName}
+          </h3>
+          {dish.price > 0 && (
+            <span className="shrink-0 rounded-full bg-teal-100 px-2.5 py-1 text-xs font-semibold text-teal-700 dark:bg-teal-900/30 dark:text-teal-300">
+              RM {dish.price.toFixed(0)}
+            </span>
+          )}
+        </div>
+
+        {/* Description */}
+        {dish.description && (
+          <p className="mb-3 line-clamp-2 text-sm text-gray-600 dark:text-gray-400">
+            {dish.description}
+          </p>
+        )}
+
+        {/* Restaurant row */}
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <span className="text-sm text-gray-600 dark:text-gray-400">
+            {dish.restaurantName || 'Restaurant'}
+          </span>
+          {dish.restaurantIsHalal && (
+            <HalalBadge isHalal={true} size="sm" />
+          )}
+        </div>
+
+        {/* Stats */}
+        <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <span className="inline-flex items-center rounded-full bg-pink-100 px-2.5 py-1 text-xs font-semibold text-pink-700 dark:bg-pink-900/30 dark:text-pink-300">
+            🚀 {dish.mentionCount} mentions
+          </span>
+          <span className="text-sm font-semibold text-teal-600 dark:text-teal-400">
+            {dish.recommendPercentage}% recommend
+          </span>
+        </div>
       </div>
     </div>
   );

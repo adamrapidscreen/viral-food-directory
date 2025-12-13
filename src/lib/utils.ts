@@ -128,6 +128,56 @@ export function getHalalLabel(
 }
 
 /**
+ * Format review count to readable string (e.g., 1200 -> "1.2K")
+ */
+export function formatReviewCount(count: number): string {
+  if (count === 0) return '0';
+  if (count < 1000) return count.toString();
+  if (count < 1000000) {
+    const k = count / 1000;
+    return k % 1 === 0 ? `${k}K` : `${k.toFixed(1)}K`;
+  }
+  const m = count / 1000000;
+  return m % 1 === 0 ? `${m}M` : `${m.toFixed(1)}M`;
+}
+
+/**
+ * Format date to relative time or readable date
+ */
+export function formatDate(dateString: string): string {
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+  if (diffDays === 0) return 'Today';
+  if (diffDays === 1) return 'Yesterday';
+  if (diffDays < 7) return `${diffDays} days ago`;
+  if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
+  if (diffDays < 365) return `${Math.floor(diffDays / 30)} months ago`;
+
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+/**
+ * Get current day's operating hours
+ */
+export function getCurrentDayHours(operatingHours: Record<string, string>): string {
+  const now = new Date();
+  const dayNames = [
+    'sunday',
+    'monday',
+    'tuesday',
+    'wednesday',
+    'thursday',
+    'friday',
+    'saturday',
+  ];
+  const currentDay = dayNames[now.getDay()].toLowerCase();
+  return operatingHours[currentDay] || 'Closed';
+}
+
+/**
  * Conditional class name utility
  * Filters out falsy values and joins with space
  */
