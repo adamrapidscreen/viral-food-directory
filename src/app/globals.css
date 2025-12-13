@@ -70,3 +70,34 @@ a:focus-visible {
 .pulse-ring {
   animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
+
+/* Fix Next.js portal positioning issues - target custom element */
+nextjs-portal {
+  position: relative !important;
+  display: block !important;
+  width: 100% !important;
+  height: auto !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+}
+
+/* Target Next.js dev tools portal specifically (inside script tags) */
+script > nextjs-portal {
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 1px !important;
+  height: 1px !important;
+  overflow: hidden !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+  display: block !important;
+}
+
+/* Ensure toast container doesn't conflict with Next.js portals */
+body > [data-nextjs-portal],
+body > nextjs-portal:not(script > nextjs-portal) {
+  position: relative;
+  width: auto;
+  height: auto;
+}

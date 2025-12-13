@@ -13,6 +13,20 @@ const CACHE_TTL = 10 * 60 * 1000; // 10 minutes
 
 // Transform database row to Restaurant interface
 function transformRestaurant(row: any): Restaurant {
+  // Calculate aggregateRating with fallback logic
+  let aggregateRating = row.aggregate_rating;
+  if (aggregateRating == null) {
+    // Fallback: use googleRating or tripadvisorRating if available
+    if (row.google_rating != null) {
+      aggregateRating = row.google_rating;
+    } else if (row.tripadvisor_rating != null) {
+      aggregateRating = row.tripadvisor_rating;
+    } else {
+      // Default to 0 if no rating is available
+      aggregateRating = 0;
+    }
+  }
+
   return {
     id: row.id,
     name: row.name,
@@ -22,7 +36,7 @@ function transformRestaurant(row: any): Restaurant {
     category: row.category,
     googleRating: row.google_rating ?? undefined,
     tripadvisorRating: row.tripadvisor_rating ?? undefined,
-    aggregateRating: row.aggregate_rating,
+    aggregateRating,
     mustTryDish: row.must_try_dish,
     mustTryConfidence: row.must_try_confidence,
     priceRange: row.price_range,

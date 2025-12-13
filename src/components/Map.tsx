@@ -55,8 +55,8 @@ export default function MapComponent({
     [restaurants, selectedId]
   );
 
-  // Determine map center - prioritize centerRestaurantId, then userLocation, then default
-  const mapCenter = useMemo(() => {
+  // Determine initial map center - prioritize centerRestaurantId, then userLocation, then default
+  const initialCenter = useMemo(() => {
     if (centerRestaurantId) {
       const restaurant = restaurants.find((r) => r.id === centerRestaurantId);
       if (restaurant) {
@@ -102,22 +102,23 @@ export default function MapComponent({
     <div className="relative h-full min-h-[400px]">
       {/* Loading state */}
       {!isMapLoaded && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-gray-100 dark:bg-slate-800">
+        <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-gray-100 dark:bg-slate-800 pointer-events-none">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-teal-600 border-t-transparent"></div>
         </div>
       )}
 
       <APIProvider apiKey={apiKey}>
         <Map
-          defaultCenter={KUALA_LUMPUR_CENTER}
-          center={mapCenter}
+          defaultCenter={initialCenter}
           defaultZoom={centerRestaurantId ? 16 : DEFAULT_ZOOM}
           mapId="viral-food-map"
-          disableDefaultUI={true}
+          disableDefaultUI={false}
           gestureHandling="greedy"
-          onClick={handleMapClick}
-          onLoad={() => setIsMapLoaded(true)}
-          className="h-full w-full rounded-xl"
+          draggable={true}
+          scrollwheel={true}
+          reuseMaps={true}
+          onIdle={() => setIsMapLoaded(true)}
+          style={{ width: '100%', height: '100%' }}
         >
           {/* User location marker */}
           {userLocation && (

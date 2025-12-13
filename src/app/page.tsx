@@ -124,6 +124,7 @@ export default function HomePage() {
 
   // Get empty state message
   const getEmptyMessage = () => {
+    if (filters.searchQuery) return `No restaurants found for "${filters.searchQuery}"`;
     if (filters.halal) return "No halal restaurants match your filters";
     if (filters.category) return `No ${filters.category} restaurants found`;
     if (filters.openNow) return "No restaurants are currently open";
@@ -176,7 +177,7 @@ export default function HomePage() {
         {/* Mobile Layout */}
         <div className="md:hidden">
           {view === 'map' ? (
-            <div className="h-[60vh] mb-4 overflow-hidden rounded-xl">
+            <div className="relative h-[60vh] mb-4 rounded-xl">
               <Map
                 restaurants={restaurants}
                 selectedId={selectedId}
@@ -244,7 +245,7 @@ export default function HomePage() {
         {/* Desktop Layout */}
         <div className="hidden md:grid md:grid-cols-[60%_40%] md:gap-6 md:py-6">
           {/* Map */}
-          <div className="h-[calc(100vh-300px)] overflow-hidden rounded-xl">
+          <div className="relative h-[calc(100vh-300px)] rounded-xl">
             <Map
               restaurants={restaurants}
               selectedId={selectedId}

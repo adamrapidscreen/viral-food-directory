@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { TrendingDish, ApiResponse } from '@/types';
@@ -177,7 +178,6 @@ function DishCard({
   onKeyDown: (e: React.KeyboardEvent) => void;
 }) {
   const [imageError, setImageError] = useState(false);
-  const [imageLoading, setImageLoading] = useState(true);
 
   return (
     <div
@@ -189,23 +189,18 @@ function DishCard({
       className="group cursor-pointer overflow-hidden rounded-2xl bg-white shadow-sm transition-shadow hover:shadow-md dark:bg-slate-800"
     >
       {/* Image */}
-      <div className="relative h-40 w-full overflow-hidden">
-        {imageLoading && (
-          <div className="absolute inset-0 animate-pulse bg-gray-200 dark:bg-slate-700" />
-        )}
+      <div className="relative h-40 w-full overflow-hidden bg-gray-100 dark:bg-slate-700">
         {dish.photoUrl && !imageError ? (
-          <img
+          <Image
             src={dish.photoUrl}
             alt={dish.dishName}
-            className="h-40 w-full object-cover transition-transform duration-300 group-hover:scale-105"
-            onLoad={() => setImageLoading(false)}
-            onError={() => {
-              setImageError(true);
-              setImageLoading(false);
-            }}
+            fill
+            sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 33vw"
+            className="object-cover transition-transform duration-300 group-hover:scale-105"
+            onError={() => setImageError(true)}
           />
         ) : (
-          <div className="flex h-40 w-full items-center justify-center bg-gray-100 text-5xl dark:bg-slate-700">
+          <div className="flex h-full w-full items-center justify-center text-5xl">
             🍽️
           </div>
         )}

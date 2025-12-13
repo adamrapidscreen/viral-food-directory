@@ -1,6 +1,9 @@
 import type { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
+import { ToastProvider } from '@/contexts/ToastContext';
+import ToastContainer from '@/components/ToastContainer';
+import PortalFix from '@/components/PortalFix';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -58,7 +61,11 @@ export default function RootLayout({
       <body
         className={`${inter.variable} bg-gray-50 font-sans text-gray-900 antialiased dark:bg-slate-900 dark:text-gray-50`}
       >
-        {children}
+        <ToastProvider>
+          {children}
+          <ToastContainer />
+          <PortalFix />
+        </ToastProvider>
       </body>
     </html>
   );

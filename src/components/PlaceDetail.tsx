@@ -1,8 +1,12 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
+import { useState } from 'react';
+import Image from 'next/image';
+import { useRouter, usePathname } from 'next/navigation';
+import { Share2 } from 'lucide-react';
 import { Restaurant, Review } from '@/types';
 import HalalBadge from './HalalBadge';
+import { useToast } from '@/contexts/ToastContext';
 import { formatPrice, isOpenNow, formatDate, getCurrentDayHours } from '@/lib/utils';
 
 interface PlaceDetailProps {
@@ -74,6 +78,9 @@ function SourceBadge({ source }: { source: 'google' | 'tripadvisor' }) {
 
 export default function PlaceDetail({ restaurant, reviews }: PlaceDetailProps) {
   const router = useRouter();
+  const pathname = usePathname();
+  const { showToast } = useToast();
+  const [imageError, setImageError] = useState(false);
   const heroImage = restaurant.photos?.[0];
   const isOpen = isOpenNow(restaurant.operatingHours);
   const isTrending = restaurant.trendingScore > 75;
@@ -86,18 +93,80 @@ export default function PlaceDetail({ restaurant, reviews }: PlaceDetailProps) {
     window.open(url, '_blank');
   };
 
+  const handleShare = async () => {
+    // Get current URL
+    const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+    const currentUrl = `${baseUrl}${pathname}`;
+
+    const shareData = {
+      title: restaurant.name,
+      text: 'Check out this viral spot!',
+      url: currentUrl,
+    };
+
+    // Try Web Share API first (mobile-friendly)
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      // Check if canShare is available and if data is shareable
+      const canShare =
+        typeof navigator.canShare === 'function'
+          ? navigator.canShare(shareData)
+          : true;
+
+      if (canShare) {
+        try {
+          await navigator.share(shareData);
+          showToast('Shared successfully!', 'success');
+          return;
+        } catch (error) {
+          // User cancelled share dialog - don't show error
+          if ((error as Error).name === 'AbortError') {
+            return;
+          }
+          // Other errors - fall through to clipboard
+          console.error('Error sharing:', error);
+        }
+      }
+    }
+
+    // Fallback: Copy to clipboard
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard) {
+        await navigator.clipboard.writeText(currentUrl);
+        showToast('Link copied to clipboard!', 'success');
+      } else {
+        // Fallback for older browsers - create temporary input element
+        const textArea = document.createElement('textarea');
+        textArea.value = currentUrl;
+        textArea.style.position = 'fixed';
+        textArea.style.opacity = '0';
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+        showToast('Link copied to clipboard!', 'success');
+      }
+    } catch (error) {
+      console.error('Error copying to clipboard:', error);
+      showToast('Failed to share. Please try again.', 'error');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-slate-900">
       {/* Hero Section */}
-      <div className="relative h-80 overflow-hidden">
-        {heroImage ? (
-          <img
+      <div className="relative h-80 overflow-hidden bg-gradient-to-br from-teal-600 to-teal-800">
+        {heroImage && !imageError ? (
+          <Image
             src={heroImage}
             alt={restaurant.name}
-            className="h-full w-full object-cover"
+            fill
+            priority
+            sizes="100vw"
+            className="object-cover"
+            onError={() => setImageError(true)}
           />
         ) : (
-          <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-teal-600 to-teal-800 text-6xl">
+          <div className="flex h-full w-full items-center justify-center text-6xl">
             {categoryEmoji[restaurant.category]}
           </div>
         )}
@@ -124,6 +193,15 @@ export default function PlaceDetail({ restaurant, reviews }: PlaceDetailProps) {
               d="M15 19l-7-7 7-7"
             />
           </svg>
+        </button>
+
+        {/* Share Button */}
+        <button
+          onClick={handleShare}
+          className="absolute right-6 top-6 rounded-full bg-white/90 p-2 shadow-lg backdrop-blur-sm transition-all hover:bg-white dark:bg-slate-800/90 dark:hover:bg-slate-800"
+          aria-label="Share restaurant"
+        >
+          <Share2 className="h-5 w-5 text-gray-900 dark:text-white" />
         </button>
 
         {/* Content Overlay */}
@@ -156,7 +234,7 @@ export default function PlaceDetail({ restaurant, reviews }: PlaceDetailProps) {
       <div className="grid grid-cols-1 gap-4 border-b border-gray-200 bg-white py-6 px-6 dark:border-slate-700 dark:bg-slate-800 sm:grid-cols-3">
         <div className="text-center">
           <div className="text-2xl font-bold text-teal-600 dark:text-teal-400">
-            ⭐ {restaurant.aggregateRating.toFixed(1)}
+            ⭐ {restaurant.aggregateRating != null ? restaurant.aggregateRating.toFixed(1) : 'N/A'}
           </div>
           <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">Rating</div>
         </div>

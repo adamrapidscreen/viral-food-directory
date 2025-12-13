@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
 import { Restaurant } from '@/types';
 import HalalBadge from './HalalBadge';
 import { formatReviewCount } from '@/lib/utils';
@@ -33,8 +34,6 @@ export default function RestaurantCard({
   onClick,
 }: RestaurantCardProps) {
   const [imageError, setImageError] = useState(false);
-  const [imageLoading, setImageLoading] = useState(true);
-
   const thumbnailUrl = restaurant.photos?.[0];
   const isTrending = restaurant.trendingScore > 75;
   const hasMustTry = restaurant.mustTryDish && restaurant.mustTryConfidence > 50;
@@ -69,23 +68,18 @@ export default function RestaurantCard({
       }`}
     >
       {/* Left: Image */}
-      <div className="relative h-20 w-20 flex-shrink-0">
-        {imageLoading && (
-          <div className="absolute inset-0 animate-pulse rounded-xl bg-gray-200 dark:bg-slate-700" />
-        )}
+      <div className="relative h-20 w-20 flex-shrink-0 overflow-hidden rounded-xl bg-gray-100 dark:bg-slate-700">
         {thumbnailUrl && !imageError ? (
-          <img
+          <Image
             src={thumbnailUrl}
             alt={restaurant.name}
-            className="h-20 w-20 rounded-xl object-cover"
-            onLoad={() => setImageLoading(false)}
-            onError={() => {
-              setImageError(true);
-              setImageLoading(false);
-            }}
+            fill
+            sizes="(max-width: 768px) 100vw, 33vw"
+            className="object-cover"
+            onError={() => setImageError(true)}
           />
         ) : (
-          <div className="flex h-20 w-20 items-center justify-center rounded-xl bg-gray-100 text-3xl dark:bg-slate-700">
+          <div className="flex h-full w-full items-center justify-center text-3xl">
             {categoryEmojiIcon}
           </div>
         )}
@@ -133,7 +127,7 @@ export default function RestaurantCard({
         {/* Rating row */}
         <div className="flex items-center gap-2 text-sm">
           <span className="font-semibold text-gray-900 dark:text-white">
-            ⭐ {restaurant.aggregateRating.toFixed(1)}
+            ⭐ {restaurant.aggregateRating != null ? restaurant.aggregateRating.toFixed(1) : 'N/A'}
           </span>
           {reviewCount > 0 && (
             <span className="text-xs text-gray-500 dark:text-gray-400">

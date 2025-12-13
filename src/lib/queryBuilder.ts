@@ -32,5 +32,9 @@ export function buildRestaurantQuery(
     params.append('halal', 'true');
   }
 
+  if (filters.searchQuery && filters.searchQuery.trim()) {
+    params.append('searchQuery', filters.searchQuery.trim());
+  }
+
   return params.toString();
 }

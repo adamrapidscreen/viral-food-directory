@@ -14,6 +14,20 @@ const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 // Transform database row to Restaurant interface
 function transformRestaurant(row: any): Restaurant {
+  // Calculate aggregateRating with fallback logic
+  let aggregateRating = row.aggregate_rating;
+  if (aggregateRating == null) {
+    // Fallback: use googleRating or tripadvisorRating if available
+    if (row.google_rating != null) {
+      aggregateRating = row.google_rating;
+    } else if (row.tripadvisor_rating != null) {
+      aggregateRating = row.tripadvisor_rating;
+    } else {
+      // Default to 0 if no rating is available
+      aggregateRating = 0;
+    }
+  }
+
   return {
     id: row.id,
     name: row.name,
@@ -23,7 +37,7 @@ function transformRestaurant(row: any): Restaurant {
     category: row.category,
     googleRating: row.google_rating ?? undefined,
     tripadvisorRating: row.tripadvisor_rating ?? undefined,
-    aggregateRating: row.aggregate_rating,
+    aggregateRating,
     mustTryDish: row.must_try_dish,
     mustTryConfidence: row.must_try_confidence,
     priceRange: row.price_range,
@@ -47,9 +61,10 @@ export async function GET(request: NextRequest) {
     const priceRange = searchParams.get('priceRange') || null;
     const openNow = searchParams.get('openNow') === 'true';
     const halal = searchParams.get('halal') === 'true';
+    const searchQuery = searchParams.get('searchQuery') || null;
 
-    // Build cache key
-    const cacheKey = `restaurants:${lat}:${lng}:${radius}:${category}:${priceRange}:${openNow}:${halal}`;
+    // Build cache key (include searchQuery)
+    const cacheKey = `restaurants:${lat}:${lng}:${radius}:${category}:${priceRange}:${openNow}:${halal}:${searchQuery || ''}`;
 
     // Check cache
     const cached = cache.get(cacheKey);
@@ -63,9 +78,18 @@ export async function GET(request: NextRequest) {
 
     // Query Supabase
     const supabase = createClient();
-    const { data: restaurantsData, error: dbError } = await supabase
-      .from('restaurants')
-      .select('*')
+    let query = supabase.from('restaurants').select('*');
+
+    // Apply search filter FIRST (before other filters)
+    if (searchQuery && searchQuery.trim()) {
+      const searchTerm = `%${searchQuery.trim()}%`;
+      // Use .or() with PostgREST syntax: column.operator.value,column.operator.value
+      query = query.or(
+        `name.ilike.${searchTerm},category.ilike.${searchTerm},must_try_dish.ilike.${searchTerm}`
+      );
+    }
+
+    const { data: restaurantsData, error: dbError } = await query
       .order('trending_score', { ascending: false })
       .limit(50);
 

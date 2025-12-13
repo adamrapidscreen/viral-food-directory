@@ -1,5 +1,7 @@
 'use client';
 
+import { useState } from 'react';
+import Image from 'next/image';
 import { InfoWindow } from '@vis.gl/react-google-maps';
 import { Restaurant } from '@/types';
 import HalalBadge from './HalalBadge';
@@ -15,12 +17,14 @@ export default function MarkerInfoWindow({
   onClose,
   onViewDetails,
 }: MarkerInfoWindowProps) {
+  const [imageError, setImageError] = useState(false);
+
   if (!restaurant) {
     return null;
   }
 
   const isTrending = restaurant.trendingScore > 75;
-  const thumbnailUrl = restaurant.photos?.[0] || '/placeholder-food.jpg';
+  const thumbnailUrl = restaurant.photos?.[0];
   const distanceText = restaurant.distance
     ? `${restaurant.distance.toFixed(1)} km`
     : '';
@@ -55,14 +59,22 @@ export default function MarkerInfoWindow({
 
         <div className="flex gap-3">
           {/* Thumbnail */}
-          <img
-            src={thumbnailUrl}
-            alt={restaurant.name}
-            className="h-16 w-16 flex-shrink-0 rounded-lg object-cover"
-            onError={(e) => {
-              (e.target as HTMLImageElement).src = '/placeholder-food.jpg';
-            }}
-          />
+          <div className="relative h-16 w-16 flex-shrink-0 overflow-hidden rounded-lg bg-gray-100 dark:bg-slate-700">
+            {thumbnailUrl && !imageError ? (
+              <Image
+                src={thumbnailUrl}
+                alt={restaurant.name}
+                fill
+                sizes="64px"
+                className="object-cover"
+                onError={() => setImageError(true)}
+              />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center text-2xl">
+                🍽️
+              </div>
+            )}
+          </div>
 
           {/* Content */}
           <div className="flex-1 min-w-0">
@@ -87,7 +99,7 @@ export default function MarkerInfoWindow({
               {/* Rating */}
               <div className="flex items-center gap-1">
                 <span className="text-sm font-semibold text-gray-900 dark:text-white">
-                  ⭐ {restaurant.aggregateRating.toFixed(1)}
+                  ⭐ {restaurant.aggregateRating != null ? restaurant.aggregateRating.toFixed(1) : 'N/A'}
                 </span>
               </div>
 
