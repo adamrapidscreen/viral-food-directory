@@ -9,7 +9,9 @@ interface CacheEntry {
 }
 
 const cache = new Map<string, CacheEntry>();
-const CACHE_TTL = 10 * 60 * 1000; // 10 minutes
+const CACHE_TTL = 30 * 60 * 1000; // 30 minutes (increased from 10 minutes)
+const PLACE_DETAILS_CACHE_DAYS = 7; // Refresh place details after 7 days
+const PLACE_DETAILS_CACHE_TTL = PLACE_DETAILS_CACHE_DAYS * 24 * 60 * 60 * 1000; // 7 days
 
 // Transform database row to Restaurant interface
 function transformRestaurant(row: any): Restaurant {
@@ -61,17 +63,53 @@ export async function GET(
     // Build cache key
     const cacheKey = `restaurant:${id}`;
 
-    // Check cache
+    // Check in-memory cache first
     const cached = cache.get(cacheKey);
     if (cached && Date.now() < cached.expires) {
       return NextResponse.json({
         data: cached.data,
-        source: 'cache',
+        source: 'memory-cache',
       } as ApiResponse<Restaurant>);
     }
 
-    // Query Supabase
+    // Check Supabase cache for place details (permanent cache, refresh if > 7 days)
     const supabase = createClient();
+    const { data: supabaseCache, error: cacheError } = await supabase
+      .from('cache')
+      .select('*')
+      .eq('cache_key', cacheKey)
+      .single();
+
+    if (!cacheError && supabaseCache) {
+      const cacheAge = Date.now() - new Date(supabaseCache.created_at).getTime();
+      if (cacheAge < PLACE_DETAILS_CACHE_TTL) {
+        // Cache is still valid (less than 7 days old)
+        const cachedData = supabaseCache.cache_data as Restaurant;
+        
+        // Also store in in-memory cache for faster access
+        cache.set(cacheKey, {
+          data: cachedData,
+          expires: Date.now() + CACHE_TTL,
+        });
+
+        return NextResponse.json({
+          data: cachedData,
+          source: 'supabase-cache',
+        } as ApiResponse<Restaurant>);
+      } else {
+        // Cache is older than 7 days, will refresh below
+        const { error: deleteError } = await supabase
+          .from('cache')
+          .delete()
+          .eq('cache_key', cacheKey);
+        
+        if (deleteError) {
+          console.warn('Failed to delete expired cache:', deleteError.message);
+        }
+      }
+    }
+
+    // Query Supabase (cache miss or expired - fetch fresh data)
     const { data: restaurantData, error: dbError } = await supabase
       .from('restaurants')
       .select('*')
@@ -103,11 +141,29 @@ export async function GET(
     // Transform to Restaurant interface
     const restaurant = transformRestaurant(restaurantData);
 
-    // Store in cache
+    // Store in in-memory cache
     cache.set(cacheKey, {
       data: restaurant,
       expires: Date.now() + CACHE_TTL,
     });
+
+    // Store in Supabase cache permanently (restaurant data rarely changes)
+    // Photos are already stored in database, never re-fetch unless explicitly refreshed
+    const { error: cacheUpsertError } = await supabase
+      .from('cache')
+      .upsert({
+        cache_key: cacheKey,
+        cache_data: restaurant,
+        created_at: new Date().toISOString(),
+      }, {
+        onConflict: 'cache_key',
+      });
+
+    // Silently fail if cache table doesn't exist or upsert fails
+    // This allows the API to work even without the cache table
+    if (cacheUpsertError) {
+      console.warn('Failed to store in Supabase cache:', cacheUpsertError.message);
+    }
 
     return NextResponse.json({
       data: restaurant,

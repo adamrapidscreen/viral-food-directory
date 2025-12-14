@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Restaurant, FilterState, ApiResponse } from '@/types';
 import { useGeolocation } from '@/hooks/useGeolocation';
 import { useDebounce } from '@/hooks/useDebounce';
-import { buildRestaurantQuery } from '@/lib/queryBuilder';
+import { useToast } from '@/contexts/ToastContext';
 import Map from '@/components/Map';
 import RestaurantCard from '@/components/RestaurantCard';
 import FilterBar from '@/components/FilterBar';
@@ -19,6 +19,8 @@ const DEFAULT_FILTERS: FilterState = {
   searchQuery: '',
 };
 
+const KUALA_LUMPUR_LOCATION = { latitude: 3.139, longitude: 101.6869 };
+
 export default function HomePage() {
   // State
   const [restaurants, setRestaurants] = useState<Restaurant[]>([]);
@@ -27,60 +29,89 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<'map' | 'list'>('map');
+  const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number }>({ lat: 3.139, lng: 101.6869 });
 
   // Geolocation
   const geo = useGeolocation();
+  const { showToast } = useToast();
 
   // Refs
   const listContainerRef = useRef<HTMLDivElement>(null);
   const selectedCardRef = useRef<HTMLDivElement>(null);
 
-  // Transform geolocation to userLocation format
-  const userLocation = useMemo(() => {
-    if (geo.loading || !geo.latitude || !geo.longitude) return null;
-    return { lat: geo.latitude, lng: geo.longitude };
-  }, [geo.loading, geo.latitude, geo.longitude]);
-
-  // Determine location for API call
-  const apiLocation = useMemo(() => {
-    if (filters.nearMe && userLocation) {
-      return userLocation;
+  // Store user location in state when geolocation is available
+  useEffect(() => {
+    if (!geo.loading) {
+      if (geo.error) {
+        // Location denied or unavailable - default to KL
+        setUserLocation(null);
+        showToast('Location unavailable. Showing KL area.', 'info');
+      } else if (geo.latitude && geo.longitude) {
+        // User location available - store it
+        setUserLocation({ latitude: geo.latitude, longitude: geo.longitude });
+      }
     }
-    // Default to KL center if not using nearMe
-    return { lat: 3.139, lng: 101.6869 };
-  }, [filters.nearMe, userLocation]);
+  }, [geo.loading, geo.latitude, geo.longitude, geo.error, showToast]);
+
+  // Transform userLocation to map format
+  const userLocationForMap = useMemo(() => {
+    if (!userLocation) return null;
+    return { lat: userLocation.latitude, lng: userLocation.longitude };
+  }, [userLocation]);
 
   // Debounce filters to avoid excessive API calls
   const debouncedFilters = useDebounce(filters, 300);
 
   // Fetch restaurants
-  useEffect(() => {
-    const fetchRestaurants = async () => {
-      // Wait for geolocation if nearMe is enabled
-      if (filters.nearMe && geo.loading) return;
+  const fetchRestaurants = useCallback(async () => {
+    setLoading(true);
+    setError(null);
 
-      setLoading(true);
-      setError(null);
-
-      try {
-        const query = buildRestaurantQuery(debouncedFilters, apiLocation);
-        const response = await fetch(`/api/restaurants?${query}`);
-        const data: ApiResponse<Restaurant[]> = await response.json();
-
-        if (data.error) {
-          setError(data.error);
-        } else {
-          setRestaurants(data.data || []);
-        }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to fetch restaurants');
-      } finally {
-        setLoading(false);
+    try {
+      const params = new URLSearchParams();
+      
+      // Only apply location/radius filtering when "Near Me" is explicitly enabled
+      if (debouncedFilters.nearMe && userLocation) {
+        // User wants nearby restaurants - use their location with 15km radius
+        params.set('lat', userLocation.latitude.toString());
+        params.set('lng', userLocation.longitude.toString());
+        params.set('radius', '15'); // 15km radius for "Near Me"
+      } else if (!debouncedFilters.nearMe) {
+        // "Near Me" is OFF - show all restaurants (no location filter)
+        // Don't send lat/lng/radius, API will return all restaurants
+      } else {
+        // "Near Me" is ON but no user location yet - use KL as fallback with large radius
+        params.set('lat', KUALA_LUMPUR_LOCATION.latitude.toString());
+        params.set('lng', KUALA_LUMPUR_LOCATION.longitude.toString());
+        params.set('radius', '200'); // Large radius to show all restaurants
       }
-    };
+      
+      if (debouncedFilters.halal) params.set('halal', 'true');
+      if (debouncedFilters.category) params.set('category', debouncedFilters.category);
+      if (debouncedFilters.priceRange) params.set('priceRange', debouncedFilters.priceRange);
+      if (debouncedFilters.openNow) params.set('openNow', 'true');
+      if (debouncedFilters.searchQuery) params.set('searchQuery', debouncedFilters.searchQuery);
+      
+      const response = await fetch(`/api/restaurants?${params}`);
+      const data: ApiResponse<Restaurant[]> = await response.json();
 
+      if (data.error) {
+        setError(data.error);
+      } else {
+        setRestaurants(data.data || []);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to fetch restaurants');
+    } finally {
+      setLoading(false);
+    }
+  }, [userLocation, debouncedFilters]);
+
+  // Fetch restaurants when userLocation or filters change
+  useEffect(() => {
     fetchRestaurants();
-  }, [debouncedFilters, apiLocation, filters.nearMe, geo.loading]);
+  }, [fetchRestaurants]);
 
   // Scroll to selected card in list view
   useEffect(() => {
@@ -109,6 +140,43 @@ export default function HomePage() {
       // Scroll will be handled by useEffect
     }
   };
+
+  // Handle "Near Me" click - toggle filter and request geolocation if turning ON
+  const handleNearMeClick = useCallback(() => {
+    // If "Near Me" is currently ON, just turn it OFF (toggle)
+    if (filters.nearMe) {
+      setFilters((prev) => ({ ...prev, nearMe: false }));
+      // Reset map center to KL when turning off
+      setMapCenter({ lat: 3.139, lng: 101.6869 });
+      return;
+    }
+
+    // "Near Me" is OFF - turning it ON, so request geolocation
+    if (navigator.geolocation) {
+      setLoading(true);
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const { latitude, longitude } = position.coords;
+          // Update user location state
+          setUserLocation({ latitude, longitude });
+          // Update filters to trigger re-fetch
+          setFilters((prev) => ({ ...prev, nearMe: true }));
+          // Center map on user location
+          setMapCenter({ lat: latitude, lng: longitude });
+          setLoading(false);
+        },
+        (error) => {
+          console.error('Geolocation error:', error);
+          showToast('Could not get your location. Please enable location access.', 'error');
+          setLoading(false);
+          // Don't set nearMe to true if geolocation fails
+        },
+        { enableHighAccuracy: true, timeout: 10000 }
+      );
+    } else {
+      showToast('Geolocation is not supported by your browser.', 'error');
+    }
+  }, [filters.nearMe, showToast]);
 
   // Handle filter change
   const handleFilterChange = (newFilters: FilterState) => {
@@ -153,7 +221,11 @@ export default function HomePage() {
 
       {/* FilterBar - Sticky */}
       <div className="sticky top-0 z-40">
-        <FilterBar filters={filters} onFilterChange={handleFilterChange} />
+        <FilterBar 
+          filters={filters} 
+          onFilterChange={handleFilterChange}
+          onNearMeClick={handleNearMeClick}
+        />
         
         {/* Halal Filter Badge */}
         {filters.halal && (
@@ -182,8 +254,9 @@ export default function HomePage() {
                 restaurants={restaurants}
                 selectedId={selectedId}
                 onSelectRestaurant={handleMarkerClick}
-                userLocation={userLocation}
+                userLocation={userLocationForMap}
                 centerRestaurantId={selectedId}
+                center={mapCenter}
               />
             </div>
           ) : (
@@ -250,8 +323,9 @@ export default function HomePage() {
               restaurants={restaurants}
               selectedId={selectedId}
               onSelectRestaurant={handleMarkerClick}
-              userLocation={userLocation}
+              userLocation={userLocationForMap}
               centerRestaurantId={selectedId}
+              center={mapCenter}
             />
           </div>
 

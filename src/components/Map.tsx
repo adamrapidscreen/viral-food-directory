@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { APIProvider, Map, AdvancedMarker } from '@vis.gl/react-google-maps';
+import { APIProvider, Map, AdvancedMarker, useMap } from '@vis.gl/react-google-maps';
 import { Restaurant, MapMarker } from '@/types';
 import FoodMarker from './FoodMarker';
 import MarkerInfoWindow from './MarkerInfoWindow';
@@ -13,6 +13,7 @@ interface MapProps {
   onSelectRestaurant: (id: string | null) => void;
   userLocation: { lat: number; lng: number } | null;
   centerRestaurantId?: string | null;
+  center?: { lat: number; lng: number };
 }
 
 const KUALA_LUMPUR_CENTER = { lat: 3.139, lng: 101.6869 };
@@ -33,12 +34,26 @@ function restaurantToMapMarker(restaurant: Restaurant): MapMarker {
   };
 }
 
+// Internal component to handle map panning
+function MapController({ center }: { center?: { lat: number; lng: number } }) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (map && center) {
+      map.panTo(center);
+    }
+  }, [map, center]);
+
+  return null;
+}
+
 export default function MapComponent({
   restaurants,
   selectedId,
   onSelectRestaurant,
   userLocation,
   centerRestaurantId,
+  center,
 }: MapProps) {
   const router = useRouter();
   const [isMapLoaded, setIsMapLoaded] = useState(false);
@@ -55,8 +70,11 @@ export default function MapComponent({
     [restaurants, selectedId]
   );
 
-  // Determine initial map center - prioritize centerRestaurantId, then userLocation, then default
+  // Determine initial map center - prioritize center prop, then centerRestaurantId, then userLocation, then default
   const initialCenter = useMemo(() => {
+    if (center) {
+      return center;
+    }
     if (centerRestaurantId) {
       const restaurant = restaurants.find((r) => r.id === centerRestaurantId);
       if (restaurant) {
@@ -64,7 +82,7 @@ export default function MapComponent({
       }
     }
     return userLocation || KUALA_LUMPUR_CENTER;
-  }, [centerRestaurantId, restaurants, userLocation]);
+  }, [center, centerRestaurantId, restaurants, userLocation]);
 
   // Handle marker click
   const handleMarkerClick = (id: string) => {
@@ -120,6 +138,8 @@ export default function MapComponent({
           onIdle={() => setIsMapLoaded(true)}
           style={{ width: '100%', height: '100%' }}
         >
+          {/* Map controller to handle panning when center changes */}
+          <MapController center={center} />
           {/* User location marker */}
           {userLocation && (
             <AdvancedMarker position={userLocation}>

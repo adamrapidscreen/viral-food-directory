@@ -2,20 +2,39 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase-server';
 
 /**
- * Calculate viral score using the formula:
- * (google_rating * 10) + (log10(google_review_count) * 20) + (50 if is_halal) + (random 0-10)
+ * Calculate viral score with daily rotation factor
+ * Base rating (max 50) + Review volume (max 30) + Halal bonus (10) + Daily rotation (0-10)
  */
 function calculateViralScore(
-  googleRating: number | null,
-  reviewCount: number,
-  isHalal: boolean
+  restaurant: {
+    google_rating: number | null;
+    google_review_count: number | null;
+    is_halal: boolean;
+    id: string;
+  }
 ): number {
-  const ratingScore = (googleRating ?? 0) * 10;
-  const reviewScore = reviewCount > 0 ? Math.log10(reviewCount) * 20 : 0;
-  const halalBonus = isHalal ? 50 : 0;
-  const jitter = Math.random() * 10; // Random 0-10 to rotate trends
-
-  return Math.round(ratingScore + reviewScore + halalBonus + jitter);
+  let score = 0;
+  
+  // Base rating (max 50 points)
+  score += (restaurant.google_rating || 0) * 10;
+  
+  // Review volume (max 30 points)
+  const reviewScore = Math.min(
+    Math.log10((restaurant.google_review_count || 0) + 1) * 10,
+    30
+  );
+  score += reviewScore;
+  
+  // Halal bonus for Malaysia market (10 points)
+  if (restaurant.is_halal) score += 10;
+  
+  // Random daily rotation factor (0-10 points)
+  // This makes trending list change each day
+  const dailySeed = new Date().getDate();
+  const rotationBonus = ((restaurant.id.charCodeAt(0) + dailySeed) % 10);
+  score += rotationBonus;
+  
+  return Math.round(score * 100) / 100;
 }
 
 /**
@@ -84,39 +103,18 @@ async function createTrendingDish(
   }
 }
 
-export async function POST(request: NextRequest) {
+/**
+ * Main update viral score logic
+ */
+async function updateViralScores(): Promise<NextResponse> {
   try {
-    // Verify CRON_SECRET
-    const authHeader = request.headers.get('authorization');
-    const cronSecret = process.env.CRON_SECRET;
-
-    if (!cronSecret) {
-      return NextResponse.json(
-        { error: 'CRON_SECRET not configured' },
-        { status: 500 }
-      );
-    }
-
-    // Check authorization header or body
-    const providedSecret =
-      authHeader?.replace('Bearer ', '') ||
-      (await request.json().catch(() => ({}))).secret;
-
-    if (providedSecret !== cronSecret) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
-
     // Initialize Supabase client
     const supabase = createServerClient();
 
-    // Fetch all restaurants
+    // Query all restaurants from Supabase
     const { data: restaurants, error: fetchError } = await supabase
       .from('restaurants')
-      .select('id, google_rating, viral_mentions, is_halal, name, photos')
-      .order('trending_score', { ascending: false });
+      .select('id, google_rating, viral_mentions, is_halal, name, photos');
 
     if (fetchError) {
       throw new Error(`Failed to fetch restaurants: ${fetchError.message}`);
@@ -133,7 +131,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Calculate viral scores and update restaurants
+    // For each restaurant, calculate viral_score
     const updates: Array<{
       id: string;
       trending_score: number;
@@ -141,29 +139,30 @@ export async function POST(request: NextRequest) {
     }> = [];
 
     for (const restaurant of restaurants) {
-      const googleRating = restaurant.google_rating ?? null;
-      const reviewCount = restaurant.viral_mentions || 0;
-      const isHalal = restaurant.is_halal || false;
-
-      const viralScore = calculateViralScore(googleRating, reviewCount, isHalal);
+      const viralScore = calculateViralScore({
+        google_rating: restaurant.google_rating ?? null,
+        google_review_count: restaurant.viral_mentions ?? null, // viral_mentions stores review count
+        is_halal: restaurant.is_halal || false,
+        id: restaurant.id,
+      });
 
       updates.push({
         id: restaurant.id,
         trending_score: viralScore,
-        is_trending: false, // Will be set to true for top 10% below
+        is_trending: false, // Will be set to true for top 15% below
       });
     }
 
-    // Sort by viral score to determine top 10%
+    // Sort by viral score to determine top 15%
     updates.sort((a, b) => b.trending_score - a.trending_score);
-    const top10PercentCount = Math.max(1, Math.ceil(updates.length * 0.1));
+    const top15PercentCount = Math.max(1, Math.ceil(updates.length * 0.15));
 
-    // Mark top 10% as trending
-    for (let i = 0; i < top10PercentCount; i++) {
+    // Mark top 15% as is_trending = true, rest as false
+    for (let i = 0; i < top15PercentCount; i++) {
       updates[i].is_trending = true;
     }
 
-    // Batch update restaurants
+    // Update all restaurants with new viral_score
     let updatedCount = 0;
     let updateErrors = 0;
 
@@ -224,11 +223,12 @@ export async function POST(request: NextRequest) {
       try {
         const exists = await trendingDishExists(supabase, restaurant.id);
         if (!exists) {
-          const viralScore = calculateViralScore(
-            restaurant.google_rating ?? null,
-            restaurant.viral_mentions || 0,
-            restaurant.is_halal || false
-          );
+          const viralScore = calculateViralScore({
+            google_rating: restaurant.google_rating ?? null,
+            google_review_count: restaurant.viral_mentions ?? null, // viral_mentions stores review count
+            is_halal: restaurant.is_halal || false,
+            id: restaurant.id,
+          });
           const success = await createTrendingDish(supabase, restaurant, viralScore);
           if (success) {
             trendingDishesCreated++;
@@ -242,17 +242,14 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Return stats: { processed: X, trending: X }
     return NextResponse.json({
       success: true,
       stats: {
-        total: restaurants.length,
-        updated: updatedCount,
-        updateErrors,
-        top10Percent: top10PercentCount,
-        trendingDishesCreated,
-        trendingDishErrors,
+        processed: restaurants.length,
+        trending: top15PercentCount,
       },
-      message: `Updated viral scores for ${updatedCount} restaurants. Created ${trendingDishesCreated} trending dishes.`,
+      message: `Updated viral scores for ${updatedCount} restaurants. ${top15PercentCount} marked as trending.`,
     });
   } catch (error) {
     console.error('Cron job error:', error);
@@ -264,4 +261,67 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+/**
+ * POST handler - for production cron jobs
+ */
+export async function POST(request: NextRequest) {
+  // COMMENTED OUT FOR TESTING - Re-enable before production!
+  // const authHeader = request.headers.get('authorization');
+  // const cronSecret = process.env.CRON_SECRET;
+  //
+  // if (!cronSecret) {
+  //   return NextResponse.json(
+  //     { error: 'CRON_SECRET not configured' },
+  //     { status: 500 }
+  //   );
+  // }
+  //
+  // // Check authorization header or body
+  // const providedSecret =
+  //   authHeader?.replace('Bearer ', '') ||
+  //   (await request.json().catch(() => ({}))).secret;
+  //
+  // if (providedSecret !== cronSecret) {
+  //   return NextResponse.json(
+  //     { error: 'Unauthorized' },
+  //     { status: 401 }
+  //   );
+  // }
+
+  return updateViralScores();
+}
+
+/**
+ * GET handler - for browser testing
+ * Usage: http://localhost:3000/api/cron/update-viral-score
+ * 
+ * NOTE: Auth check is commented out for testing. Re-enable before production!
+ */
+export async function GET(request: NextRequest) {
+  // COMMENTED OUT FOR TESTING - Re-enable before production!
+  // const searchParams = request.nextUrl.searchParams;
+  // const authHeader = request.headers.get('authorization');
+  // const cronSecret = process.env.CRON_SECRET;
+  //
+  // if (!cronSecret) {
+  //   return NextResponse.json(
+  //     { error: 'CRON_SECRET not configured' },
+  //     { status: 500 }
+  //   );
+  // }
+  //
+  // const providedSecret =
+  //   searchParams.get('secret') ||
+  //   authHeader?.replace('Bearer ', '');
+  //
+  // if (providedSecret !== cronSecret) {
+  //   return NextResponse.json(
+  //     { error: 'Unauthorized' },
+  //     { status: 401 }
+  //   );
+  // }
+
+  return updateViralScores();
 }

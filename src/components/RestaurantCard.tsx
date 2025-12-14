@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { Restaurant } from '@/types';
 import HalalBadge from './HalalBadge';
 import { formatReviewCount } from '@/lib/utils';
+import { useLazyImage } from '@/hooks/useLazyImage';
 
 interface RestaurantCardProps {
   restaurant: Restaurant;
@@ -33,8 +34,14 @@ export default function RestaurantCard({
   isSelected,
   onClick,
 }: RestaurantCardProps) {
-  const [imageError, setImageError] = useState(false);
   const thumbnailUrl = restaurant.photos?.[0];
+  
+  // Use Intersection Observer to lazy load images
+  const { imgRef, shouldLoad, imageError, setImageError } = useLazyImage(thumbnailUrl, {
+    rootMargin: '100px', // Start loading 100px before card is visible
+    threshold: 0.1,
+  });
+
   const isTrending = restaurant.trendingScore > 75;
   const hasMustTry = restaurant.mustTryDish && restaurant.mustTryConfidence > 50;
   const distanceText = restaurant.distance
@@ -67,9 +74,12 @@ export default function RestaurantCard({
         isSelected ? 'ring-2 ring-teal-600' : ''
       }`}
     >
-      {/* Left: Image */}
-      <div className="relative h-20 w-20 flex-shrink-0 overflow-hidden rounded-xl bg-gray-100 dark:bg-slate-700">
-        {thumbnailUrl && !imageError ? (
+      {/* Left: Image - Lazy loaded with Intersection Observer */}
+      <div 
+        ref={imgRef}
+        className="relative h-20 w-20 flex-shrink-0 overflow-hidden rounded-xl bg-gray-100 dark:bg-slate-700"
+      >
+        {shouldLoad && thumbnailUrl && !imageError ? (
           <Image
             src={thumbnailUrl}
             alt={restaurant.name}

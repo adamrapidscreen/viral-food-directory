@@ -2,18 +2,56 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase-server';
 
 // Target areas in Malaysia
-const TARGET_AREAS = [
-  { name: 'Kuala Lumpur', lat: 3.139, lng: 101.6869 },
-  { name: 'Penang', lat: 5.4164, lng: 100.3327 },
+const AREAS = [
+  { name: 'Cyberjaya', lat: 2.9213, lng: 101.6559 },
+  { name: 'Putrajaya', lat: 2.9264, lng: 101.6964 },
+  { name: 'Bangi', lat: 2.9474, lng: 101.7820 },
+  { name: 'Kuala Lumpur', lat: 3.1390, lng: 101.6869 },
+  { name: 'Kuala Terengganu', lat: 5.3117, lng: 103.1324 },
   { name: 'Johor Bahru', lat: 1.4927, lng: 103.7414 },
+  { name: 'Alor Setar', lat: 6.1254, lng: 100.3673 },
+  { name: 'Dungun', lat: 4.7574, lng: 103.4216 },
+  { name: 'Melaka', lat: 2.1896, lng: 102.2501 },
+  { name: 'Georgetown', lat: 5.4164, lng: 100.3327 },
+  { name: 'Kota Kinabalu', lat: 5.9804, lng: 116.0735 },
+  { name: 'Kuching', lat: 1.5535, lng: 110.3593 },
+  { name: 'Ipoh', lat: 4.5975, lng: 101.0901 },
+  { name: 'Kota Bharu', lat: 6.1254, lng: 102.2386 },
+  { name: 'Genting Highlands', lat: 3.4236, lng: 101.7932 },
+  { name: 'Janda Baik', lat: 3.3361, lng: 101.8572 },
 ];
 
 // Viral keywords to search for
-const VIRAL_KEYWORDS = ['nasi lemak', 'viral cafe', 'kunafa', 'roti canai', 'matcha'];
+const KEYWORDS = [
+  'nasi lemak',
+  'viral cafe',
+  'roti canai',
+  'mee goreng',
+  'char kuey teow',
+  'laksa',
+  'satay',
+  'durian',
+  'cendol',
+  'teh tarik spot',
+];
 
 // Google Places API configuration
 const GOOGLE_PLACES_TEXT_SEARCH_URL = 'https://maps.googleapis.com/maps/api/place/textsearch/json';
+const GOOGLE_PLACES_DETAILS_URL = 'https://maps.googleapis.com/maps/api/place/details/json';
 const GOOGLE_PLACES_PHOTO_URL = 'https://maps.googleapis.com/maps/api/place/photo';
+
+// Field mask for Place Details API - only request needed data to reduce costs
+// DO NOT request: reviews (expensive), openingHours (can add later), websiteUri (not critical)
+const PLACE_DETAILS_FIELDS = [
+  'displayName',
+  'formattedAddress',
+  'location',
+  'rating',
+  'userRatingCount',
+  'priceLevel',
+  'businessStatus',
+  'photos'
+].join(',');
 
 interface GooglePlaceResult {
   place_id: string;
@@ -148,6 +186,48 @@ async function searchGooglePlaces(
 }
 
 /**
+ * Fetch Place Details with field masks to reduce costs
+ * Only requests needed fields, excludes expensive ones like reviews, openingHours, websiteUri
+ */
+async function fetchPlaceDetails(
+  placeId: string,
+  apiKey: string,
+  searchLogs: string[]
+): Promise<any | null> {
+  // Add fields parameter to URL to only request needed data
+  let url = `${GOOGLE_PLACES_DETAILS_URL}?place_id=${placeId}&key=${apiKey}`;
+  url += `&fields=${PLACE_DETAILS_FIELDS}`;
+
+  // Log request (without API key)
+  const urlWithoutKey = url.replace(/key=[^&]+/, 'key=***HIDDEN***');
+  const urlLog = `[Place Details] Request URL: ${urlWithoutKey}`;
+  console.log(urlLog);
+  searchLogs.push(urlLog);
+
+  try {
+    const response = await fetch(url);
+    const data = await response.json();
+
+    if (data.status === 'OK' && data.result) {
+      const successLog = `[Place Details] ✅ Successfully fetched details for ${placeId}`;
+      console.log(successLog);
+      searchLogs.push(successLog);
+      return data.result;
+    } else {
+      const errorLog = `[Place Details] ⚠️  Status: ${data.status} - ${data.error_message || 'Unknown error'}`;
+      console.warn(errorLog);
+      searchLogs.push(errorLog);
+      return null;
+    }
+  } catch (error) {
+    const errorMsg = `[Place Details] ❌ Exception fetching details for ${placeId}: ${error instanceof Error ? error.message : 'Unknown error'}`;
+    console.error(errorMsg);
+    searchLogs.push(errorMsg);
+    return null;
+  }
+}
+
+/**
  * Convert Google photo reference to URL
  */
 function getGooglePhotoUrl(photoReference: string, apiKey: string): string {
@@ -200,41 +280,71 @@ function calculateTrendingScore(rating: number, reviewCount: number): number {
 
 /**
  * Map Google Place to our restaurant schema
+ * Optionally enhances with Place Details API data if provided
  */
 function mapGooglePlaceToRestaurant(
   place: GooglePlaceResult,
   keyword: string,
-  apiKey: string
+  apiKey: string,
+  placeDetails?: any
 ): any {
-  const rating = place.rating ?? 0;
-  const reviewCount = place.user_ratings_total ?? 0;
+  // Use Place Details data if available, otherwise fall back to Text Search data
+  const rating = placeDetails?.rating ?? place.rating ?? 0;
+  // Handle both new API format (userRatingCount) and old API format (user_ratings_total)
+  const reviewCount = placeDetails?.userRatingCount ?? 
+                      placeDetails?.user_ratings_total ?? 
+                      place.user_ratings_total ?? 0;
   const trendingScore = calculateTrendingScore(rating, reviewCount);
+  // Handle both new API format (businessStatus) and old API format (business_status)
+  const businessStatus = placeDetails?.businessStatus ?? placeDetails?.business_status;
 
-  // Extract photo URL if available
+  // Extract photo URL if available (prefer Place Details photos)
   const photos: string[] = [];
-  if (place.photos && place.photos.length > 0) {
+  if (placeDetails?.photos && placeDetails.photos.length > 0) {
+    photos.push(getGooglePhotoUrl(placeDetails.photos[0].photo_reference, apiKey));
+  } else if (place.photos && place.photos.length > 0) {
     photos.push(getGooglePhotoUrl(place.photos[0].photo_reference, apiKey));
   }
 
+  // Use Place Details address if available, otherwise use Text Search address
+  // Handle both new API format (formattedAddress) and old API format (formatted_address)
+  const address = placeDetails?.formattedAddress ?? 
+                  placeDetails?.formatted_address ?? 
+                  place.formatted_address;
+  
+  // Use Place Details name if available, otherwise use Text Search name
+  // Handle both new API format (displayName.text) and old API format (name)
+  const name = placeDetails?.displayName?.text ?? 
+               placeDetails?.displayName ?? 
+               placeDetails?.name ?? 
+               place.name;
+
+  // Use Place Details location if available
+  // Handle both new API format (location.latitude/longitude) and old API format (geometry.location)
+  const location = placeDetails?.location 
+    ? { lat: placeDetails.location.latitude, lng: placeDetails.location.longitude }
+    : placeDetails?.geometry?.location ?? place.geometry.location;
+
   return {
     google_place_id: place.place_id,
-    name: place.name,
-    address: place.formatted_address,
-    lat: place.geometry.location.lat,
-    lng: place.geometry.location.lng,
+    name,
+    address,
+    lat: location.lat,
+    lng: location.lng,
     category: mapCategory(place.types),
     google_rating: rating,
     aggregate_rating: rating, // Use Google rating as aggregate
     must_try_dish: keyword || 'Signature Dish', // Use keyword as must-try hint
     must_try_confidence: 75, // Default confidence
-    price_range: mapPriceRange(place.price_level),
-    operating_hours: {}, // Would require Place Details API call
+    price_range: mapPriceRange(placeDetails?.priceLevel ?? placeDetails?.price_level ?? place.price_level),
+    operating_hours: {}, // Not requested in field mask to reduce costs
     viral_mentions: reviewCount,
     trending_score: trendingScore,
     photos,
     is_halal: false, // Default to false, requires manual verification
     halal_certified: false,
     halal_cert_number: null,
+    business_status: businessStatus, // Store business status if available
   };
 }
 
@@ -435,16 +545,16 @@ async function seedRestaurants(): Promise<NextResponse> {
     const supabase = createServerClient();
 
     // Process each area and keyword combination
-    const startMessage = `[Seed Restaurants] Starting search: ${TARGET_AREAS.length} areas × ${VIRAL_KEYWORDS.length} keywords`;
+    const startMessage = `[Seed Restaurants] Starting search: ${AREAS.length} areas × ${KEYWORDS.length} keywords`;
     console.log(startMessage);
     searchLogs.push(startMessage);
     
-    for (const area of TARGET_AREAS) {
+    for (const area of AREAS) {
       const areaMessage = `[Seed Restaurants] Processing area: ${area.name} (${area.lat}, ${area.lng})`;
       console.log(areaMessage);
       searchLogs.push(areaMessage);
       
-      for (const keyword of VIRAL_KEYWORDS) {
+      for (const keyword of KEYWORDS) {
         const keywordMessage = `[Seed Restaurants] Searching: "${keyword}" in ${area.name}`;
         console.log(keywordMessage);
         searchLogs.push(keywordMessage);
@@ -467,8 +577,18 @@ async function seedRestaurants(): Promise<NextResponse> {
             console.log(existsLog);
             searchLogs.push(existsLog);
 
-            // Map Google Place to our schema
-            const restaurantData = mapGooglePlaceToRestaurant(place, keyword, apiKey);
+            // Optionally fetch Place Details with field masks to enhance data
+            // This reduces costs by only requesting needed fields
+            let placeDetails: any = null;
+            if (!exists) {
+              // Only fetch Place Details for new restaurants to reduce API calls
+              // Rate limit: wait 1 second before Place Details call
+              await delay(1000);
+              placeDetails = await fetchPlaceDetails(place.place_id, apiKey, searchLogs);
+            }
+
+            // Map Google Place to our schema (with optional Place Details enhancement)
+            const restaurantData = mapGooglePlaceToRestaurant(place, keyword, apiKey, placeDetails);
 
             if (exists) {
               // Update existing restaurant
@@ -544,7 +664,7 @@ async function seedRestaurants(): Promise<NextResponse> {
         skipped,
         errors,
       },
-      message: `Processed ${TARGET_AREAS.length} areas × ${VIRAL_KEYWORDS.length} keywords`,
+      message: `Processed ${AREAS.length} areas × ${KEYWORDS.length} keywords`,
       logs: searchLogs,
       errors: errorLogs.length > 0 ? errorLogs : undefined,
     });

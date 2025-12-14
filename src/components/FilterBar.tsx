@@ -7,22 +7,15 @@ import { useDebounce } from '@/hooks/useDebounce';
 interface FilterBarProps {
   filters: FilterState;
   onFilterChange: (filters: FilterState) => void;
+  onNearMeClick?: () => void;
 }
 
 const categories = [
-  { value: 'hawker', label: '🍜 Hawker', icon: '🍜' },
-  { value: 'restaurant', label: '🍽️ Restaurant', icon: '🍽️' },
-  { value: 'cafe', label: '☕ Cafe', icon: '☕' },
-  { value: 'foodcourt', label: '🏪 Foodcourt', icon: '🏪' },
+  { value: 'restaurant', label: 'Restaurant', icon: '🍽️' },
+  { value: 'cafe', label: 'Cafe', icon: '☕' },
 ] as const;
 
-const priceRanges = [
-  { value: '$', label: '💰 Budget ($)' },
-  { value: '$$', label: '💰💰 Mid ($$)' },
-  { value: '$$$', label: '💰💰💰 Premium ($$$+)' },
-] as const;
-
-export default function FilterBar({ filters, onFilterChange }: FilterBarProps) {
+export default function FilterBar({ filters, onFilterChange, onNearMeClick }: FilterBarProps) {
   const [searchValue, setSearchValue] = useState(filters.searchQuery || '');
   const debouncedSearch = useDebounce(searchValue, 300);
 
@@ -52,9 +45,15 @@ export default function FilterBar({ filters, onFilterChange }: FilterBarProps) {
     onFilterChange({ ...filters, searchQuery: '' });
   };
 
-  // Toggle near me
+  // Handle near me click
   const handleNearMeToggle = () => {
-    onFilterChange({ ...filters, nearMe: !filters.nearMe });
+    if (onNearMeClick) {
+      // Call the custom handler if provided
+      onNearMeClick();
+    } else {
+      // Fallback to just toggling the filter
+      onFilterChange({ ...filters, nearMe: !filters.nearMe });
+    }
   };
 
   // Toggle open now
@@ -70,21 +69,13 @@ export default function FilterBar({ filters, onFilterChange }: FilterBarProps) {
     });
   };
 
-  // Handle price range filter (mutually exclusive)
-  const handlePriceRangeChange = (priceRange: string) => {
-    onFilterChange({
-      ...filters,
-      priceRange: filters.priceRange === priceRange ? null : priceRange,
-    });
-  };
-
   // Toggle halal filter
   const handleHalalToggle = () => {
     onFilterChange({ ...filters, halal: !filters.halal });
   };
 
   return (
-    <div className="sticky top-0 z-40 border-b border-gray-200 bg-white/80 py-3 backdrop-blur-md dark:border-gray-700 dark:bg-slate-900/80">
+    <div className="sticky top-0 z-40 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-gray-200 dark:border-gray-700 py-3">
       {/* Mobile: Search bar on its own row */}
       <div className="mb-3 px-4 md:hidden">
         <div className="relative">
@@ -137,7 +128,8 @@ export default function FilterBar({ filters, onFilterChange }: FilterBarProps) {
             </button>
           )}
         </div>
-        <div className="flex flex-1 gap-2 overflow-x-auto scrollbar-hide">
+        <div className="flex-1 overflow-x-auto scrollbar-hide" style={{ WebkitOverflowScrolling: 'touch' }}>
+          <div className="flex gap-2 px-4 whitespace-nowrap min-w-max">
         {/* Near Me */}
         <button
           onClick={handleNearMeToggle}
@@ -183,24 +175,75 @@ export default function FilterBar({ filters, onFilterChange }: FilterBarProps) {
           >
             <span>{cat.icon}</span>
             <span className="hidden sm:inline">{cat.label}</span>
-            <span className="sm:hidden">{cat.icon}</span>
           </button>
         ))}
 
-        {/* Price Range Filters */}
-        {priceRanges.map((price) => (
+        {/* Halal Filter - GREEN when active */}
+        <button
+          onClick={handleHalalToggle}
+          className={`flex shrink-0 items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium transition-all duration-200 ${
+            filters.halal
+              ? 'bg-green-600 text-white shadow-sm hover:bg-green-700 dark:bg-green-500 dark:hover:bg-green-600'
+              : 'border border-gray-300 bg-white text-gray-600 hover:border-green-600 hover:bg-green-50 dark:border-slate-700 dark:bg-slate-800 dark:text-gray-300 dark:hover:border-green-500 dark:hover:bg-green-900/20'
+          }`}
+          aria-label="Filter by halal restaurants"
+          aria-pressed={filters.halal}
+        >
+          <span>✅</span>
+          <span>Halal Only</span>
+        </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Mobile: Filters scrollable row */}
+      <div className="overflow-x-auto scrollbar-hide md:hidden" style={{ WebkitOverflowScrolling: 'touch' }}>
+        <div className="flex gap-2 px-4 whitespace-nowrap min-w-max">
+        {/* Near Me */}
+        <button
+          onClick={handleNearMeToggle}
+          className={`flex shrink-0 items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium transition-all duration-200 ${
+            filters.nearMe
+              ? 'bg-teal-600 text-white shadow-sm hover:bg-teal-700 dark:bg-teal-500 dark:hover:bg-teal-600'
+              : 'border border-gray-300 bg-white text-gray-600 hover:border-teal-600 hover:bg-teal-50 dark:border-slate-700 dark:bg-slate-800 dark:text-gray-300 dark:hover:border-teal-500 dark:hover:bg-teal-900/20'
+          }`}
+          aria-label="Filter by nearby locations"
+          aria-pressed={filters.nearMe}
+        >
+          <span>📍</span>
+          <span>Near Me</span>
+        </button>
+
+        {/* Open Now */}
+        <button
+          onClick={handleOpenNowToggle}
+          className={`flex shrink-0 items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium transition-all duration-200 ${
+            filters.openNow
+              ? 'bg-teal-600 text-white shadow-sm hover:bg-teal-700 dark:bg-teal-500 dark:hover:bg-teal-600'
+              : 'border border-gray-300 bg-white text-gray-600 hover:border-teal-600 hover:bg-teal-50 dark:border-slate-700 dark:bg-slate-800 dark:text-gray-300 dark:hover:border-teal-500 dark:hover:bg-teal-900/20'
+          }`}
+          aria-label="Filter by open restaurants"
+          aria-pressed={filters.openNow}
+        >
+          <span>🕐</span>
+          <span>Open Now</span>
+        </button>
+
+        {/* Category Filters */}
+        {categories.map((cat) => (
           <button
-            key={price.value}
-            onClick={() => handlePriceRangeChange(price.value)}
+            key={cat.value}
+            onClick={() => handleCategoryChange(cat.value)}
             className={`flex shrink-0 items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium transition-all duration-200 ${
-              filters.priceRange === price.value
+              filters.category === cat.value
                 ? 'bg-teal-600 text-white shadow-sm hover:bg-teal-700 dark:bg-teal-500 dark:hover:bg-teal-600'
                 : 'border border-gray-300 bg-white text-gray-600 hover:border-teal-600 hover:bg-teal-50 dark:border-slate-700 dark:bg-slate-800 dark:text-gray-300 dark:hover:border-teal-500 dark:hover:bg-teal-900/20'
             }`}
-            aria-label={`Filter by ${price.label}`}
-            aria-pressed={filters.priceRange === price.value}
+            aria-label={`Filter by ${cat.label}`}
+            aria-pressed={filters.category === cat.value}
           >
-            <span>{price.label}</span>
+            <span>{cat.icon}</span>
+            <span className="hidden sm:inline">{cat.label}</span>
           </button>
         ))}
 
@@ -219,90 +262,6 @@ export default function FilterBar({ filters, onFilterChange }: FilterBarProps) {
           <span>Halal Only</span>
         </button>
         </div>
-      </div>
-
-      {/* Mobile: Filters scrollable row */}
-      <div className="flex gap-2 overflow-x-auto px-4 scrollbar-hide md:hidden">
-        {/* Near Me */}
-        <button
-          onClick={handleNearMeToggle}
-          className={`flex shrink-0 items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium transition-all duration-200 ${
-            filters.nearMe
-              ? 'bg-teal-600 text-white shadow-sm hover:bg-teal-700 dark:bg-teal-500 dark:hover:bg-teal-600'
-              : 'border border-gray-300 bg-white text-gray-600 hover:border-teal-600 hover:bg-teal-50 dark:border-slate-700 dark:bg-slate-800 dark:text-gray-300 dark:hover:border-teal-500 dark:hover:bg-teal-900/20'
-          }`}
-          aria-label="Filter by nearby locations"
-          aria-pressed={filters.nearMe}
-        >
-          <span>📍</span>
-          <span>Near Me</span>
-        </button>
-
-        {/* Open Now */}
-        <button
-          onClick={handleOpenNowToggle}
-          className={`flex shrink-0 items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium transition-all duration-200 ${
-            filters.openNow
-              ? 'bg-teal-600 text-white shadow-sm hover:bg-teal-700 dark:bg-teal-500 dark:hover:bg-teal-600'
-              : 'border border-gray-300 bg-white text-gray-600 hover:border-teal-600 hover:bg-teal-50 dark:border-slate-700 dark:bg-slate-800 dark:text-gray-300 dark:hover:border-teal-500 dark:hover:bg-teal-900/20'
-          }`}
-          aria-label="Filter by open restaurants"
-          aria-pressed={filters.openNow}
-        >
-          <span>🕐</span>
-          <span>Open Now</span>
-        </button>
-
-        {/* Category Filters */}
-        {categories.map((cat) => (
-          <button
-            key={cat.value}
-            onClick={() => handleCategoryChange(cat.value)}
-            className={`flex shrink-0 items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium transition-all duration-200 ${
-              filters.category === cat.value
-                ? 'bg-teal-600 text-white shadow-sm hover:bg-teal-700 dark:bg-teal-500 dark:hover:bg-teal-600'
-                : 'border border-gray-300 bg-white text-gray-600 hover:border-teal-600 hover:bg-teal-50 dark:border-slate-700 dark:bg-slate-800 dark:text-gray-300 dark:hover:border-teal-500 dark:hover:bg-teal-900/20'
-            }`}
-            aria-label={`Filter by ${cat.label}`}
-            aria-pressed={filters.category === cat.value}
-          >
-            <span>{cat.icon}</span>
-            <span className="hidden sm:inline">{cat.label}</span>
-            <span className="sm:hidden">{cat.icon}</span>
-          </button>
-        ))}
-
-        {/* Price Range Filters */}
-        {priceRanges.map((price) => (
-          <button
-            key={price.value}
-            onClick={() => handlePriceRangeChange(price.value)}
-            className={`flex shrink-0 items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium transition-all duration-200 ${
-              filters.priceRange === price.value
-                ? 'bg-teal-600 text-white shadow-sm hover:bg-teal-700 dark:bg-teal-500 dark:hover:bg-teal-600'
-                : 'border border-gray-300 bg-white text-gray-600 hover:border-teal-600 hover:bg-teal-50 dark:border-slate-700 dark:bg-slate-800 dark:text-gray-300 dark:hover:border-teal-500 dark:hover:bg-teal-900/20'
-            }`}
-            aria-label={`Filter by ${price.label}`}
-            aria-pressed={filters.priceRange === price.value}
-          >
-            <span>{price.label}</span>
-          </button>
-        ))}
-
-        {/* Halal Filter - GREEN when active */}
-        <button
-          onClick={handleHalalToggle}
-          className={`flex shrink-0 items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium transition-all duration-200 ${
-            filters.halal
-              ? 'bg-green-600 text-white shadow-sm hover:bg-green-700 dark:bg-green-500 dark:hover:bg-green-600'
-              : 'border border-gray-300 bg-white text-gray-600 hover:border-green-600 hover:bg-green-50 dark:border-slate-700 dark:bg-slate-800 dark:text-gray-300 dark:hover:border-green-500 dark:hover:bg-green-900/20'
-          }`}
-          aria-label="Filter by halal restaurants"
-          aria-pressed={filters.halal}
-        >
-          <span>✅</span>
-          <span>Halal Only</span>
-        </button>
       </div>
     </div>
   );

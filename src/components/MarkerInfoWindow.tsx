@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { InfoWindow } from '@vis.gl/react-google-maps';
 import { Restaurant } from '@/types';
 import HalalBadge from './HalalBadge';
+import { useLazyImage } from '@/hooks/useLazyImage';
 
 interface MarkerInfoWindowProps {
   restaurant: Restaurant | null;
@@ -17,14 +18,20 @@ export default function MarkerInfoWindow({
   onClose,
   onViewDetails,
 }: MarkerInfoWindowProps) {
-  const [imageError, setImageError] = useState(false);
-
   if (!restaurant) {
     return null;
   }
 
   const isTrending = restaurant.trendingScore > 75;
   const thumbnailUrl = restaurant.photos?.[0];
+  
+  // Use Intersection Observer to lazy load images
+  // For info windows, load immediately when visible (threshold 0)
+  const { imgRef, shouldLoad, imageError, setImageError } = useLazyImage(thumbnailUrl, {
+    rootMargin: '0px',
+    threshold: 0, // Load as soon as any part is visible
+  });
+
   const distanceText = restaurant.distance
     ? `${restaurant.distance.toFixed(1)} km`
     : '';
@@ -58,9 +65,12 @@ export default function MarkerInfoWindow({
         </button>
 
         <div className="flex gap-3">
-          {/* Thumbnail */}
-          <div className="relative h-16 w-16 flex-shrink-0 overflow-hidden rounded-lg bg-gray-100 dark:bg-slate-700">
-            {thumbnailUrl && !imageError ? (
+          {/* Thumbnail - Lazy loaded with Intersection Observer */}
+          <div 
+            ref={imgRef}
+            className="relative h-16 w-16 flex-shrink-0 overflow-hidden rounded-lg bg-gray-100 dark:bg-slate-700"
+          >
+            {shouldLoad && thumbnailUrl && !imageError ? (
               <Image
                 src={thumbnailUrl}
                 alt={restaurant.name}

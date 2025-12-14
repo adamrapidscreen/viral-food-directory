@@ -3,165 +3,144 @@ import { createClient } from '@/lib/supabase';
 import { calculateDistance, isOpenNow } from '@/lib/utils';
 import { Restaurant, ApiResponse } from '@/types';
 
-// In-memory cache with TTL
-interface CacheEntry {
-  data: Restaurant[];
-  expires: number;
-}
+// CACHE DISABLED FOR DEBUGGING - Will re-enable after fixing
+// const cache = new Map<string, CacheEntry>();
+// const CACHE_TTL = 30 * 60 * 1000;
+// const SUPABASE_CACHE_TTL = 24 * 60 * 60 * 1000;
 
-const cache = new Map<string, CacheEntry>();
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
-
-// Transform database row to Restaurant interface
-function transformRestaurant(row: any): Restaurant {
-  // Calculate aggregateRating with fallback logic
-  let aggregateRating = row.aggregate_rating;
-  if (aggregateRating == null) {
-    // Fallback: use googleRating or tripadvisorRating if available
-    if (row.google_rating != null) {
-      aggregateRating = row.google_rating;
-    } else if (row.tripadvisor_rating != null) {
-      aggregateRating = row.tripadvisor_rating;
-    } else {
-      // Default to 0 if no rating is available
-      aggregateRating = 0;
-    }
-  }
-
-  return {
-    id: row.id,
-    name: row.name,
-    address: row.address,
-    lat: row.lat,
-    lng: row.lng,
-    category: row.category,
-    googleRating: row.google_rating ?? undefined,
-    tripadvisorRating: row.tripadvisor_rating ?? undefined,
-    aggregateRating,
-    mustTryDish: row.must_try_dish,
-    mustTryConfidence: row.must_try_confidence,
-    priceRange: row.price_range,
-    operatingHours: row.operating_hours || {},
-    viralMentions: row.viral_mentions,
-    trendingScore: row.trending_score,
-    photos: row.photos || [],
-    isHalal: row.is_halal,
-    halalCertified: row.halal_certified ?? undefined,
-    halalCertNumber: row.halal_cert_number ?? undefined,
-  };
-}
-
-export async function GET(request: NextRequest) {
+export async function GET(req: NextRequest) {
   try {
-    const searchParams = request.nextUrl.searchParams;
-    const lat = searchParams.get('lat') ? parseFloat(searchParams.get('lat')!) : null;
-    const lng = searchParams.get('lng') ? parseFloat(searchParams.get('lng')!) : null;
-    const radius = searchParams.get('radius') ? parseFloat(searchParams.get('radius')!) : 5;
-    const category = searchParams.get('category') || null;
-    const priceRange = searchParams.get('priceRange') || null;
-    const openNow = searchParams.get('openNow') === 'true';
+    const { searchParams } = new URL(req.url);
+    const lat = searchParams.get('lat');
+    const lng = searchParams.get('lng');
+    const radius = parseFloat(searchParams.get('radius') || '50'); // Default 50km instead of 15km
     const halal = searchParams.get('halal') === 'true';
-    const searchQuery = searchParams.get('searchQuery') || null;
+    const category = searchParams.get('category');
+    const search = searchParams.get('search') || searchParams.get('searchQuery'); // Support both param names
+    const openNow = searchParams.get('openNow') === 'true';
+    const priceRange = searchParams.get('priceRange');
+    const trending = searchParams.get('trending') === 'true';
+    const limit = parseInt(searchParams.get('limit') || '200');
 
-    // Build cache key (include searchQuery)
-    const cacheKey = `restaurants:${lat}:${lng}:${radius}:${category}:${priceRange}:${openNow}:${halal}:${searchQuery || ''}`;
-
-    // Check cache
-    const cached = cache.get(cacheKey);
-    if (cached && Date.now() < cached.expires) {
-      return NextResponse.json({
-        data: cached.data,
-        source: 'cache',
-        count: cached.data.length,
-      } as ApiResponse<Restaurant[]>);
-    }
-
-    // Query Supabase
     const supabase = createClient();
+
+    // Build query
     let query = supabase.from('restaurants').select('*');
 
-    // Apply search filter FIRST (before other filters)
-    if (searchQuery && searchQuery.trim()) {
-      const searchTerm = `%${searchQuery.trim()}%`;
-      // Use .or() with PostgREST syntax: column.operator.value,column.operator.value
-      query = query.or(
-        `name.ilike.${searchTerm},category.ilike.${searchTerm},must_try_dish.ilike.${searchTerm}`
-      );
+    // If trending=true, filter by is_trending and sort by score
+    if (trending) {
+      // Try to filter by is_trending, but handle gracefully if column doesn't exist
+      query = query.order('trending_score', { ascending: false });
+      // Note: If is_trending column exists, we'll filter client-side below
+    } else {
+      // Default: order by trending_score for all restaurants
+      query = query.order('trending_score', { ascending: false });
     }
 
-    const { data: restaurantsData, error: dbError } = await query
-      .order('trending_score', { ascending: false })
-      .limit(50);
+    // Apply limit
+    query = query.limit(limit);
 
-    if (dbError) {
-      throw new Error(`Database error: ${dbError.message}`);
+    const { data, error } = await query;
+
+    if (error) {
+      console.error('Supabase error:', error);
+      return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    if (!restaurantsData) {
-      throw new Error('No data returned from database');
-    }
+    let restaurants = data || [];
+    console.log('Raw count from DB:', restaurants.length);
 
-    // Transform and calculate distances
-    let restaurants: Restaurant[] = restaurantsData.map((row) => {
-      const restaurant = transformRestaurant(row);
-      
-      // Calculate distance if lat/lng provided
-      if (lat !== null && lng !== null) {
-        restaurant.distance = calculateDistance(lat, lng, restaurant.lat, restaurant.lng);
+    // If trending=true, filter by is_trending client-side (in case column doesn't exist in DB)
+    if (trending) {
+      restaurants = restaurants.filter((r: any) => r.is_trending === true);
+      // If no trending restaurants found, fall back to top by trending_score
+      if (restaurants.length === 0) {
+        console.log('No is_trending=true found, using top by trending_score');
+        restaurants = data || [];
+        restaurants.sort((a: any, b: any) => (b.trending_score || 0) - (a.trending_score || 0));
+        restaurants = restaurants.slice(0, limit);
       }
-      
-      return restaurant;
-    });
-
-    // Apply filters in order:
-    // a. Filter by distance (radius)
-    if (lat !== null && lng !== null) {
-      restaurants = restaurants.filter((r) => {
-        return r.distance !== undefined && r.distance <= radius;
-      });
+      console.log('After trending filter:', restaurants.length);
     }
 
-    // b. Filter by category if provided
-    if (category) {
-      restaurants = restaurants.filter((r) => r.category === category);
+    // Calculate distance if user location provided (skip if trending=true, we want score-based sorting)
+    if (lat && lng && !trending) {
+      restaurants = restaurants.map((r: any) => ({
+        ...r,
+        distance: calculateDistance(parseFloat(lat), parseFloat(lng), r.lat, r.lng)
+      }));
+      // Only filter by radius if explicitly requested (radius < 100 means user wants filtering)
+      if (radius < 100) {
+        restaurants = restaurants.filter((r: any) => r.distance <= radius);
+        console.log(`After ${radius}km radius filter:`, restaurants.length);
+      }
+      // Sort by distance
+      restaurants.sort((a: any, b: any) => (a.distance || 0) - (b.distance || 0));
+    } else if (!trending) {
+      console.log('No location provided - showing all restaurants');
     }
 
-    // c. Filter by priceRange if provided
-    if (priceRange) {
-      restaurants = restaurants.filter((r) => r.priceRange === priceRange);
-    }
-
-    // d. Filter by openNow if true
-    if (openNow) {
-      restaurants = restaurants.filter((r) => isOpenNow(r.operatingHours));
-    }
-
-    // e. Filter by halal if halal=true
+    // Apply other filters
     if (halal) {
-      restaurants = restaurants.filter((r) => r.isHalal === true);
+      restaurants = restaurants.filter((r: any) => r.is_halal === true);
+      console.log('After halal filter:', restaurants.length);
+    }
+    if (category) {
+      restaurants = restaurants.filter((r: any) => r.category === category);
+      console.log('After category filter:', restaurants.length);
+    }
+    if (priceRange) {
+      restaurants = restaurants.filter((r: any) => r.price_range === priceRange);
+      console.log('After priceRange filter:', restaurants.length);
+    }
+    if (openNow) {
+      // Only show restaurants that are explicitly open (true), exclude closed (false) and unknown (null)
+      restaurants = restaurants.filter((r: any) => isOpenNow(r.operating_hours || {}) === true);
+      console.log('After openNow filter:', restaurants.length);
+    }
+    if (search) {
+      const searchLower = search.toLowerCase();
+      restaurants = restaurants.filter((r: any) => 
+        r.name?.toLowerCase().includes(searchLower) ||
+        r.category?.toLowerCase().includes(searchLower) ||
+        r.must_try_dish?.toLowerCase().includes(searchLower)
+      );
+      console.log('After search filter:', restaurants.length);
     }
 
-    // Sort by distance if lat/lng provided
-    if (lat !== null && lng !== null) {
-      restaurants.sort((a, b) => {
-        const distA = a.distance ?? Infinity;
-        const distB = b.distance ?? Infinity;
-        return distA - distB;
-      });
-    }
+    console.log('After filtering:', restaurants.length);
 
-    // Store in cache
-    cache.set(cacheKey, {
-      data: restaurants,
-      expires: Date.now() + CACHE_TTL,
-    });
+    // Transform snake_case to camelCase for frontend
+    const transformed: Restaurant[] = restaurants.map((r: any) => ({
+      id: r.id,
+      name: r.name,
+      address: r.address,
+      lat: r.lat,
+      lng: r.lng,
+      category: r.category,
+      googleRating: r.google_rating ?? undefined,
+      tripadvisorRating: r.tripadvisor_rating ?? undefined,
+      aggregateRating: r.aggregate_rating || r.google_rating || 0,
+      mustTryDish: r.must_try_dish || 'House Special',
+      mustTryConfidence: r.must_try_confidence || 75,
+      priceRange: r.price_range || '$$',
+      operatingHours: r.operating_hours || {},
+      viralMentions: r.viral_mentions || 0,
+      trendingScore: r.trending_score || 0,
+      photos: r.photos || [],
+      isHalal: r.is_halal || false,
+      halalCertified: r.halal_certified || false,
+      halalCertNumber: r.halal_cert_number ?? undefined,
+      distance: r.distance,
+    }));
 
     return NextResponse.json({
-      data: restaurants,
-      source: 'database',
-      count: restaurants.length,
+      data: transformed,
+      count: transformed.length,
+      source: 'database'
     } as ApiResponse<Restaurant[]>);
   } catch (error) {
+    console.error('Restaurants API error:', error);
     return NextResponse.json(
       {
         error: error instanceof Error ? error.message : 'An error occurred',

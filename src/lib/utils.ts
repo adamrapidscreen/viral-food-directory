@@ -42,8 +42,14 @@ export function formatPrice(priceRange: string): string {
 
 /**
  * Check if restaurant is currently open based on operating hours
+ * Returns null if no hours data available (unknown status)
  */
-export function isOpenNow(operatingHours: Record<string, string>): boolean {
+export function isOpenNow(operatingHours: Record<string, string> | null | undefined): boolean | null {
+  // Return null if no hours data (unknown status)
+  if (!operatingHours || Object.keys(operatingHours).length === 0) {
+    return null; // Unknown, not closed
+  }
+
   const now = new Date();
   const dayNames = [
     'sunday',
@@ -161,8 +167,13 @@ export function formatDate(dateString: string): string {
 
 /**
  * Get current day's operating hours
+ * Returns null if no hours data available
  */
-export function getCurrentDayHours(operatingHours: Record<string, string>): string {
+export function getCurrentDayHours(operatingHours: Record<string, string> | null | undefined): string | null {
+  if (!operatingHours || Object.keys(operatingHours).length === 0) {
+    return null; // No hours data available
+  }
+
   const now = new Date();
   const dayNames = [
     'sunday',
