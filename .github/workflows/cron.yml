@@ -1,0 +1,23 @@
+name: Viral Eats Data Refresh
+
+on:
+  schedule:
+    # Run every Sunday at 3 AM Malaysia time (UTC+8 = 7 PM Saturday UTC)
+    - cron: '0 19 * * 6'
+  workflow_dispatch: # Allows manual trigger from GitHub UI
+
+jobs:
+  refresh-data:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Seed new restaurants
+        run: |
+          curl -X GET "${{ secrets.APP_URL }}/api/cron/seed-restaurants" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            --max-time 300
+      
+      - name: Update viral scores
+        run: |
+          curl -X GET "${{ secrets.APP_URL }}/api/cron/update-viral-score" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            --max-time 60
