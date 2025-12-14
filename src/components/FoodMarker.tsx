@@ -6,7 +6,10 @@ import { MapMarker } from '@/types';
 interface FoodMarkerProps {
   place: MapMarker;
   isSelected: boolean;
+  isHovered?: boolean;
   onClick: () => void;
+  onHover?: () => void;
+  onHoverEnd?: () => void;
 }
 
 // Category emoji mapping
@@ -34,7 +37,10 @@ function getMarkerColor(place: MapMarker): string {
 export default function FoodMarker({
   place,
   isSelected,
+  isHovered,
   onClick,
+  onHover,
+  onHoverEnd,
 }: FoodMarkerProps) {
   const color = getMarkerColor(place);
   const emoji = categoryEmoji[place.category];
@@ -48,9 +54,17 @@ export default function FoodMarker({
     >
       <div
         className={`relative flex items-center justify-center transition-all duration-300 ease-out ${
-          isSelected ? 'scale-125' : 'scale-100 hover:scale-110'
-        } ${isSelected ? 'ring-2 ring-teal-600 ring-offset-2' : ''}`}
+          isSelected ? 'scale-125' : isHovered ? 'scale-115' : 'scale-100'
+        } ${
+          isSelected 
+            ? 'ring-2 ring-emerald-500 ring-offset-2' 
+            : isHovered 
+            ? 'ring-2 ring-emerald-400 ring-offset-1' 
+            : ''
+        }`}
         style={{ width: '48px', height: '48px' }}
+        onMouseEnter={onHover}
+        onMouseLeave={onHoverEnd}
       >
         {/* Halal ring */}
         {showHalalRing && (

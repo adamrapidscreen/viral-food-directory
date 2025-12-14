@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@/lib/supabase-server';
+import { isHalalOrMuslimFriendly } from '@/services/googlePlaces';
 
 // Target areas in Malaysia
 const AREAS = [
@@ -41,7 +42,7 @@ const GOOGLE_PLACES_DETAILS_URL = 'https://maps.googleapis.com/maps/api/place/de
 const GOOGLE_PLACES_PHOTO_URL = 'https://maps.googleapis.com/maps/api/place/photo';
 
 // Field mask for Place Details API - only request needed data to reduce costs
-// DO NOT request: reviews (expensive), openingHours (can add later), websiteUri (not critical)
+// DO NOT request: reviews (expensive), websiteUri (not critical)
 const PLACE_DETAILS_FIELDS = [
   'displayName',
   'formattedAddress',
@@ -50,7 +51,8 @@ const PLACE_DETAILS_FIELDS = [
   'userRatingCount',
   'priceLevel',
   'businessStatus',
-  'photos'
+  'photos',
+  'openingHours'
 ].join(',');
 
 interface GooglePlaceResult {
@@ -270,6 +272,63 @@ function mapPriceRange(priceLevel?: number): '$' | '$$' | '$$$' | '$$$$' {
 }
 
 /**
+ * Parse Google Places openingHours.periods format to Record<string, string>
+ * Google format: periods array with { open: { day: 0-6, time: "HHMM" }, close: { day: 0-6, time: "HHMM" } }
+ * Our format: { "monday": "9am-5pm", "tuesday": "9am-5pm", ... }
+ */
+function parseOperatingHours(openingHours?: any): Record<string, string> {
+  if (!openingHours || !openingHours.periods || !Array.isArray(openingHours.periods)) {
+    return {};
+  }
+
+  const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+  const hours: Record<string, string> = {};
+
+  // Initialize all days as closed
+  dayNames.forEach(day => {
+    hours[day] = 'Closed';
+  });
+
+  // Parse periods
+  openingHours.periods.forEach((period: any) => {
+    if (!period.open) return;
+
+    const day = period.open.day;
+    const openTime = period.open.time; // Format: "0900" (HHMM)
+    const closeTime = period.close?.time; // Format: "1700" (HHMM)
+
+    if (day >= 0 && day <= 6 && openTime) {
+      const dayName = dayNames[day];
+      
+      // Convert HHMM to readable format (e.g., "0900" -> "9am", "1700" -> "5pm")
+      const formatTime = (timeStr: string): string => {
+        const hour = parseInt(timeStr.substring(0, 2), 10);
+        const minute = parseInt(timeStr.substring(2, 4), 10);
+        const period = hour >= 12 ? 'pm' : 'am';
+        const hour12 = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
+        
+        if (minute === 0) {
+          return `${hour12}${period}`;
+        }
+        return `${hour12}:${minute.toString().padStart(2, '0')}${period}`;
+      };
+
+      const openFormatted = formatTime(openTime);
+      
+      if (closeTime) {
+        const closeFormatted = formatTime(closeTime);
+        hours[dayName] = `${openFormatted}-${closeFormatted}`;
+      } else {
+        // Open 24 hours or no close time
+        hours[dayName] = 'Open 24 hours';
+      }
+    }
+  });
+
+  return hours;
+}
+
+/**
  * Calculate trending score based on rating and review count
  */
 function calculateTrendingScore(rating: number, reviewCount: number): number {
@@ -325,6 +384,16 @@ function mapGooglePlaceToRestaurant(
     ? { lat: placeDetails.location.latitude, lng: placeDetails.location.longitude }
     : placeDetails?.geometry?.location ?? place.geometry.location;
 
+  // Determine halal status using comprehensive algorithm
+  // Combine place and placeDetails data for halal detection
+  const placeForHalalCheck = {
+    name: name,
+    types: place.types || [],
+    vicinity: place.formatted_address || '',
+    formatted_address: address,
+  };
+  const isHalal = isHalalOrMuslimFriendly(placeForHalalCheck);
+
   return {
     google_place_id: place.place_id,
     name,
@@ -337,11 +406,11 @@ function mapGooglePlaceToRestaurant(
     must_try_dish: keyword || 'Signature Dish', // Use keyword as must-try hint
     must_try_confidence: 75, // Default confidence
     price_range: mapPriceRange(placeDetails?.priceLevel ?? placeDetails?.price_level ?? place.price_level),
-    operating_hours: {}, // Not requested in field mask to reduce costs
+    operating_hours: parseOperatingHours(placeDetails?.openingHours ?? placeDetails?.opening_hours),
     viral_mentions: reviewCount,
     trending_score: trendingScore,
     photos,
-    is_halal: false, // Default to false, requires manual verification
+    is_halal: isHalal, // Determined by comprehensive halal detection algorithm
     halal_certified: false,
     halal_cert_number: null,
     business_status: businessStatus, // Store business status if available

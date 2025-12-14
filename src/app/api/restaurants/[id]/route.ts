@@ -47,8 +47,14 @@ function transformRestaurant(row: any): Restaurant {
     trendingScore: row.trending_score,
     photos: row.photos || [],
     isHalal: row.is_halal,
-    halalCertified: row.halal_certified ?? undefined,
     halalCertNumber: row.halal_cert_number ?? undefined,
+    // TripAdvisor fields
+    tripAdvisorRank: row.tripadvisor_rank ?? undefined,
+    tripAdvisorPriceText: row.tripadvisor_price_text ?? undefined,
+    tripAdvisorTags: row.tripadvisor_tags ?? undefined,
+    tripAdvisorTopReviewSnippet: row.tripadvisor_top_review_snippet ?? undefined,
+    tripAdvisorEnriched: row.tripadvisor_enriched ?? false,
+    tripAdvisorEnrichedAt: row.tripadvisor_enriched_at ?? undefined,
   };
 }
 

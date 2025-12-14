@@ -34,7 +34,7 @@ export default function HalalBadge({
 
   return (
     <span
-      className={`inline-flex items-center rounded-full bg-green-100 font-semibold text-green-700 dark:bg-green-900/30 dark:text-green-300 ${paddingClasses[size]} ${textClasses[size]}`}
+      className={`inline-flex items-center rounded-xl bg-emerald-500/20 font-semibold text-emerald-400 border border-emerald-500/30 ${paddingClasses[size]} ${textClasses[size]}`}
       title={tooltipText}
     >
       {badgeText}

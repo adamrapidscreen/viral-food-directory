@@ -3,6 +3,53 @@ import { createClient } from '@/lib/supabase';
 import { calculateDistance, isOpenNow } from '@/lib/utils';
 import { Restaurant, ApiResponse } from '@/types';
 
+/**
+ * Check if a restaurant has non-halal indicators in its name, address, description, or tags
+ * Excludes restaurants with pork, alcohol, or Chinese/Japanese language indicators
+ */
+function hasNonHalalIndicators(restaurant: any): boolean {
+  // Non-halal keywords to check
+  const nonHalalKeywords = [
+    'pork', 'babi', 'bacon', 'ham', 'lard', 'beer', 'wine',
+    'bar', 'pub', 'brewery', 'cocktail', 'sake', 'soju',
+    'bak kut teh', 'char siu', 'roast pork', 'bbq pork',
+    'non-halal', 'non halal', '非清真',
+    'alcohol', 'alcoholic', 'liquor', 'whiskey', 'whisky', 'vodka',
+    'chinese restaurant', 'japanese restaurant', 'sushi bar',
+    'ramen', 'izakaya', 'yakitori', 'tonkatsu', 'dim sum'
+  ];
+
+  // Combine all text fields to check
+  const name = (restaurant.name || '').toLowerCase();
+  const address = (restaurant.address || '').toLowerCase();
+  const mustTryDish = (restaurant.must_try_dish || '').toLowerCase();
+  const category = (restaurant.category || '').toLowerCase();
+  
+  // Check TripAdvisor fields if available
+  const tripadvisorTags = Array.isArray(restaurant.tripadvisor_tags) 
+    ? restaurant.tripadvisor_tags.join(' ').toLowerCase() 
+    : '';
+  const tripadvisorRank = (restaurant.tripadvisor_rank || '').toLowerCase();
+  const tripadvisorTopReview = (restaurant.tripadvisor_top_review_snippet || '').toLowerCase();
+  
+  // Combine all text for searching
+  const allText = `${name} ${address} ${mustTryDish} ${category} ${tripadvisorTags} ${tripadvisorRank} ${tripadvisorTopReview}`.toLowerCase();
+
+  // Check for non-halal keywords
+  const hasKeyword = nonHalalKeywords.some(keyword => 
+    allText.includes(keyword.toLowerCase())
+  );
+
+  // Check for Chinese characters (CJK Unified Ideographs: U+4E00–U+9FFF)
+  const textToCheck = name + address + mustTryDish + tripadvisorTags + tripadvisorRank + tripadvisorTopReview;
+  const hasChinese = /[\u4E00-\u9FFF]/.test(textToCheck);
+  
+  // Check for Japanese characters (Hiragana: U+3040–U+309F, Katakana: U+30A0–U+30FF)
+  const hasJapanese = /[\u3040-\u309F\u30A0-\u30FF]/.test(textToCheck);
+
+  return hasKeyword || hasChinese || hasJapanese;
+}
+
 // CACHE DISABLED FOR DEBUGGING - Will re-enable after fixing
 // const cache = new Map<string, CacheEntry>();
 // const CACHE_TTL = 30 * 60 * 1000;
@@ -20,7 +67,8 @@ export async function GET(req: NextRequest) {
     const openNow = searchParams.get('openNow') === 'true';
     const priceRange = searchParams.get('priceRange');
     const trending = searchParams.get('trending') === 'true';
-    const limit = parseInt(searchParams.get('limit') || '200');
+    // When halal filter is on, fetch all restaurants to check all 500+ for non-halal indicators
+    const limit = halal ? 1000 : parseInt(searchParams.get('limit') || '200');
 
     const supabase = createClient();
 
@@ -82,8 +130,18 @@ export async function GET(req: NextRequest) {
 
     // Apply other filters
     if (halal) {
-      restaurants = restaurants.filter((r: any) => r.is_halal === true);
-      console.log('After halal filter:', restaurants.length);
+      // In Malaysia, most restaurants are halal-friendly by default
+      // However, we must exclude restaurants with explicit non-halal indicators:
+      // - Pork, alcohol, or related keywords in name/address/description
+      // - Chinese or Japanese characters (likely non-halal cuisine)
+      // This ensures only halal-friendly restaurants are shown
+      const beforeCount = restaurants.length;
+      restaurants = restaurants.filter((r: any) => {
+        // Exclude restaurants with non-halal indicators
+        return !hasNonHalalIndicators(r);
+      });
+      const excludedCount = beforeCount - restaurants.length;
+      console.log(`After halal filter: ${restaurants.length} restaurants (excluded ${excludedCount} with non-halal indicators)`);
     }
     if (category) {
       restaurants = restaurants.filter((r: any) => r.category === category);
@@ -127,9 +185,15 @@ export async function GET(req: NextRequest) {
       operatingHours: r.operating_hours || {},
       viralMentions: r.viral_mentions || 0,
       trendingScore: r.trending_score || 0,
+      // TripAdvisor fields
+      tripAdvisorRank: r.tripadvisor_rank ?? undefined,
+      tripAdvisorPriceText: r.tripadvisor_price_text ?? undefined,
+      tripAdvisorTags: r.tripadvisor_tags ?? undefined,
+      tripAdvisorTopReviewSnippet: r.tripadvisor_top_review_snippet ?? undefined,
+      tripAdvisorEnriched: r.tripadvisor_enriched ?? false,
+      tripAdvisorEnrichedAt: r.tripadvisor_enriched_at ?? undefined,
       photos: r.photos || [],
       isHalal: r.is_halal || false,
-      halalCertified: r.halal_certified || false,
       halalCertNumber: r.halal_cert_number ?? undefined,
       distance: r.distance,
     }));

@@ -1,9 +1,16 @@
 import type { Metadata, Viewport } from 'next';
-import { Inter } from 'next/font/google';
+import { Plus_Jakarta_Sans, Inter } from 'next/font/google';
 import './globals.css';
 import { ToastProvider } from '@/contexts/ToastContext';
+import { HoursProvider } from '@/contexts/HoursContext';
 import ToastContainer from '@/components/ToastContainer';
 import PortalFix from '@/components/PortalFix';
+
+const plusJakartaSans = Plus_Jakarta_Sans({
+  subsets: ['latin'],
+  variable: '--font-plus-jakarta',
+  display: 'swap',
+});
 
 const inter = Inter({
   subsets: ['latin'],
@@ -47,7 +54,7 @@ export const viewport: Viewport = {
   userScalable: true,
   themeColor: [
     { media: '(prefers-color-scheme: light)', color: '#0D9488' },
-    { media: '(prefers-color-scheme: dark)', color: '#0F172A' },
+    { media: '(prefers-color-scheme: dark)', color: '#0f172a' },
   ],
 };
 
@@ -59,12 +66,14 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark" suppressHydrationWarning>
       <body
-        className={`${inter.variable} bg-gray-50 font-sans text-gray-900 antialiased dark:bg-slate-900 dark:text-gray-50`}
+        className={`${plusJakartaSans.variable} ${inter.variable} bg-slate-950 font-sans text-slate-100 antialiased`}
       >
         <ToastProvider>
-          {children}
-          <ToastContainer />
-          <PortalFix />
+          <HoursProvider>
+            {children}
+            <ToastContainer />
+            <PortalFix />
+          </HoursProvider>
         </ToastProvider>
       </body>
     </html>

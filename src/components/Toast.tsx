@@ -27,26 +27,26 @@ export default function ToastComponent({ toast, onClose }: ToastProps) {
   }, [toast.id, onClose]);
 
   const icons = {
-    success: <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />,
-    error: <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-400" />,
-    info: <Info className="h-5 w-5 text-teal-600 dark:text-teal-400" />,
+    success: <CheckCircle2 className="h-5 w-5 text-emerald-400" />,
+    error: <AlertCircle className="h-5 w-5 text-red-400" />,
+    info: <Info className="h-5 w-5 text-emerald-400" />,
   };
 
   const bgColors = {
-    success: 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800',
-    error: 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800',
-    info: 'bg-teal-50 dark:bg-teal-900/20 border-teal-200 dark:border-teal-800',
+    success: 'bg-emerald-500/10 border-emerald-500/30',
+    error: 'bg-red-500/10 border-red-500/30',
+    info: 'bg-emerald-500/10 border-emerald-500/30',
   };
 
   const textColors = {
-    success: 'text-green-800 dark:text-green-200',
-    error: 'text-red-800 dark:text-red-200',
-    info: 'text-teal-800 dark:text-teal-200',
+    success: 'text-emerald-300',
+    error: 'text-red-300',
+    info: 'text-emerald-300',
   };
 
   return (
     <div
-      className={`flex items-center gap-3 rounded-2xl border px-4 py-3 shadow-md transition-all duration-300 ${bgColors[toast.type]} ${textColors[toast.type]}`}
+      className={`glass flex items-center gap-3 rounded-2xl border px-4 py-3 shadow-md transition-all duration-300 ${bgColors[toast.type]} ${textColors[toast.type]}`}
       role="alert"
       aria-live="polite"
     >

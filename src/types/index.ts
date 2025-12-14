@@ -16,9 +16,15 @@ export interface Restaurant {
   trendingScore: number;
   photos: string[];
   isHalal: boolean;
-  halalCertified?: boolean;
   halalCertNumber?: string;
   distance?: number;
+  // TripAdvisor enrichment fields
+  tripAdvisorRank?: string; // "#3 of 500 Dessert Places in KL"
+  tripAdvisorPriceText?: string; // "RM 15 - RM 25"
+  tripAdvisorTags?: string[]; // ["Halal", "Vegetarian Friendly"]
+  tripAdvisorTopReviewSnippet?: string; // "Best satay I've ever had..."
+  tripAdvisorEnriched?: boolean;
+  tripAdvisorEnrichedAt?: string; // ISO timestamp
 }
 
 export interface TrendingDish {
@@ -68,7 +74,7 @@ export interface FilterState {
 
 export interface ApiResponse<T> {
   data: T;
-  source: 'cache' | 'database';
+  source: 'cache' | 'database' | 'memory-cache' | 'supabase-cache';
   count?: number;
   error?: string;
 }

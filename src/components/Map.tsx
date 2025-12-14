@@ -10,7 +10,9 @@ import MarkerInfoWindow from './MarkerInfoWindow';
 interface MapProps {
   restaurants: Restaurant[];
   selectedId: string | null;
+  hoveredId?: string | null;
   onSelectRestaurant: (id: string | null) => void;
+  onHoverRestaurant?: (id: string | null) => void;
   userLocation: { lat: number; lng: number } | null;
   centerRestaurantId?: string | null;
   center?: { lat: number; lng: number };
@@ -50,7 +52,9 @@ function MapController({ center }: { center?: { lat: number; lng: number } }) {
 export default function MapComponent({
   restaurants,
   selectedId,
+  hoveredId,
   onSelectRestaurant,
+  onHoverRestaurant,
   userLocation,
   centerRestaurantId,
   center,
@@ -120,8 +124,8 @@ export default function MapComponent({
     <div className="relative h-full min-h-[400px]">
       {/* Loading state */}
       {!isMapLoaded && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-gray-100 dark:bg-slate-800 pointer-events-none">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-teal-600 border-t-transparent"></div>
+        <div className="glass absolute inset-0 z-10 flex items-center justify-center rounded-2xl pointer-events-none">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-emerald-500 border-t-transparent"></div>
         </div>
       )}
 
@@ -158,7 +162,10 @@ export default function MapComponent({
               key={marker.id}
               place={marker}
               isSelected={marker.id === selectedId}
+              isHovered={marker.id === hoveredId}
               onClick={() => handleMarkerClick(marker.id)}
+              onHover={() => onHoverRestaurant?.(marker.id)}
+              onHoverEnd={() => onHoverRestaurant?.(null)}
             />
           ))}
 

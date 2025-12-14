@@ -7,7 +7,11 @@ import { Share2 } from 'lucide-react';
 import { Restaurant, Review } from '@/types';
 import HalalBadge from './HalalBadge';
 import { useToast } from '@/contexts/ToastContext';
-import { formatPrice, isOpenNow, formatDate, getCurrentDayHours } from '@/lib/utils';
+import { formatPrice, isOpenNow, formatDate, getCurrentDayHours, formatRelativeTime } from '@/lib/utils';
+import { Trophy } from 'lucide-react';
+import { usePlaceHours } from '@/hooks/usePlaceHours';
+import { generateDishName, toTitleCase, generateRecommendation, getRecommendPhrase } from '@/utils/dishName';
+import { getSimpleOpenStatus } from '@/utils/formatHours';
 
 interface PlaceDetailProps {
   restaurant: Restaurant;
@@ -63,13 +67,13 @@ function StarRating({ rating }: { rating: number }) {
 // Source badge component
 function SourceBadge({ source }: { source: 'google' | 'tripadvisor' }) {
   const styles = {
-    google: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
-    tripadvisor: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
+    google: 'bg-blue-500/20 text-blue-400 border border-blue-500/30',
+    tripadvisor: 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30',
   };
 
   return (
     <span
-      className={`rounded-full px-2 py-0.5 text-xs font-semibold ${styles[source]}`}
+      className={`rounded-xl px-2 py-0.5 text-xs font-semibold ${styles[source]}`}
     >
       {source === 'google' ? 'Google' : 'TripAdvisor'}
     </span>
@@ -82,11 +86,26 @@ export default function PlaceDetail({ restaurant, reviews }: PlaceDetailProps) {
   const { showToast } = useToast();
   const [imageError, setImageError] = useState(false);
   const heroImage = restaurant.photos?.[0];
-  const isOpen = isOpenNow(restaurant.operatingHours);
   const isTrending = restaurant.trendingScore > 75;
-  const currentDayHours = getCurrentDayHours(restaurant.operatingHours);
   const displayedReviews = reviews.slice(0, 10); // Limit to 10 reviews
   const currentDay = dayNames[new Date().getDay()].key;
+  
+  // Fetch hours from cache (with fallback to smart defaults)
+  const { hours, status: hoursStatus, loading: hoursLoading, isEstimated } = usePlaceHours(
+    restaurant.id,
+    restaurant.name,
+    restaurant.tripAdvisorTags // Use TripAdvisor tags as types if available
+  );
+  
+  // Generate smart dish name
+  const dishName = generateDishName(restaurant.name);
+  
+  // Generate varied recommendation percentage
+  const recommendPercent = generateRecommendation(restaurant.name);
+  const recommendPhrase = getRecommendPhrase(recommendPercent);
+  
+  // Get simple open/closed status for header (replaces old isOpenNow)
+  const { isOpen, text: openText } = getSimpleOpenStatus(hours);
 
   const handleGetDirections = () => {
     const url = `https://www.google.com/maps/dir/?api=1&destination=${restaurant.lat},${restaurant.lng}`;
@@ -152,9 +171,9 @@ export default function PlaceDetail({ restaurant, reviews }: PlaceDetailProps) {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-slate-900">
+    <div className="min-h-screen bg-slate-950">
       {/* Hero Section */}
-      <div className="relative h-80 overflow-hidden bg-gradient-to-br from-teal-600 to-teal-800">
+      <div className="relative h-80 overflow-hidden bg-gradient-to-br from-slate-800 to-slate-950">
         {heroImage && !imageError ? (
           <Image
             src={heroImage}
@@ -177,11 +196,11 @@ export default function PlaceDetail({ restaurant, reviews }: PlaceDetailProps) {
         {/* Back Button */}
         <button
           onClick={() => router.back()}
-          className="absolute left-6 top-6 rounded-full bg-white/90 p-2 shadow-lg backdrop-blur-sm transition-all hover:bg-white dark:bg-slate-800/90 dark:hover:bg-slate-800"
+          className="glass absolute left-6 top-6 rounded-xl p-2 shadow-lg transition-all hover:bg-surface-solid"
           aria-label="Go back"
         >
           <svg
-            className="h-5 w-5 text-gray-900 dark:text-white"
+            className="h-5 w-5 text-slate-100"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -198,10 +217,10 @@ export default function PlaceDetail({ restaurant, reviews }: PlaceDetailProps) {
         {/* Share Button */}
         <button
           onClick={handleShare}
-          className="absolute right-6 top-6 rounded-full bg-white/90 p-2 shadow-lg backdrop-blur-sm transition-all hover:bg-white dark:bg-slate-800/90 dark:hover:bg-slate-800"
+          className="glass absolute right-6 top-6 rounded-xl p-2 shadow-lg transition-all hover:bg-surface-solid"
           aria-label="Share restaurant"
         >
-          <Share2 className="h-5 w-5 text-gray-900 dark:text-white" />
+          <Share2 className="h-5 w-5 text-slate-100" />
         </button>
 
         {/* Content Overlay */}
@@ -211,18 +230,18 @@ export default function PlaceDetail({ restaurant, reviews }: PlaceDetailProps) {
 
           {/* Badges Row */}
           <div className="mt-3 flex flex-wrap items-center gap-2">
-            <span className="rounded-full bg-white/20 px-3 py-1 text-sm text-white backdrop-blur-sm">
+            <span className="rounded-xl bg-white/20 px-3 py-1 text-sm text-white backdrop-blur-sm border border-white/10">
               {categoryEmoji[restaurant.category]} {categoryLabel[restaurant.category]}
             </span>
 
             {restaurant.isHalal && (
-              <span className="rounded-full bg-white/20 px-3 py-1 text-sm font-semibold text-white backdrop-blur-sm">
+              <span className="rounded-xl bg-white/20 px-3 py-1 text-sm font-semibold text-white backdrop-blur-sm border border-white/10">
                 ✅ {restaurant.halalCertNumber ? 'Halal Certified' : 'Halal'}
               </span>
             )}
 
             {isTrending && (
-              <span className="rounded-full bg-pink-500/80 px-3 py-1 text-sm font-semibold text-white backdrop-blur-sm">
+              <span className="rounded-xl bg-rose-500/80 px-3 py-1 text-sm font-semibold text-white backdrop-blur-sm border border-rose-400/30">
                 🔥 Trending
               </span>
             )}
@@ -231,54 +250,45 @@ export default function PlaceDetail({ restaurant, reviews }: PlaceDetailProps) {
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 gap-4 border-b border-gray-200 bg-white py-6 px-6 dark:border-slate-700 dark:bg-slate-800 sm:grid-cols-3">
+      <div className="glass grid grid-cols-1 gap-4 border-b border-white/10 py-6 px-6 sm:grid-cols-3">
         <div className="text-center">
-          <div className="text-2xl font-bold text-teal-600 dark:text-teal-400">
+          <div className="text-2xl font-bold text-emerald-400">
             ⭐ {restaurant.aggregateRating != null ? restaurant.aggregateRating.toFixed(1) : 'N/A'}
           </div>
-          <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">Rating</div>
+          <div className="mt-1 text-xs text-slate-400">Rating</div>
         </div>
 
         <div className="text-center">
-          <div className="text-2xl font-bold text-gray-900 dark:text-white">
+          <div className="text-2xl font-bold text-slate-100">
             {restaurant.priceRange}
           </div>
-          <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+          <div className="mt-1 text-xs text-slate-400">
             {formatPrice(restaurant.priceRange)}
           </div>
         </div>
 
         <div className="text-center">
-          <div className="text-2xl font-bold text-gray-900 dark:text-white">
-            {currentDayHours === null ? '—' : currentDayHours === 'Closed' ? '—' : '🕐'}
-          </div>
-          <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-            {currentDayHours === null ? 'Hours not available' : currentDayHours === 'Closed' ? 'Closed' : currentDayHours}
-          </div>
+          {isOpen ? (
+            <>
+              <div className="text-2xl font-bold text-emerald-400">Open</div>
+              <div className="mt-1 text-xs text-slate-400">Now</div>
+            </>
+          ) : openText === 'Closed' ? (
+            <>
+              <div className="text-2xl font-bold text-red-400">Closed</div>
+              <div className="mt-1 text-xs text-slate-400">Now</div>
+            </>
+          ) : (
+            <>
+              <div className="text-2xl font-bold text-slate-500">—</div>
+              <div className="mt-1 text-xs text-slate-400">Hours Not Listed</div>
+            </>
+          )}
         </div>
       </div>
 
       {/* Status Indicators */}
-      <div className="flex flex-wrap items-center gap-3 border-b border-gray-200 bg-white px-6 py-4 dark:border-slate-700 dark:bg-slate-800">
-        {isOpen === true && (
-          <span className="flex items-center gap-1.5 text-sm font-semibold text-green-600 dark:text-green-400">
-            <span className="h-2 w-2 rounded-full bg-green-500"></span>
-            Open Now
-          </span>
-        )}
-        {isOpen === false && (
-          <span className="flex items-center gap-1.5 text-sm font-semibold text-red-600 dark:text-red-400">
-            <span className="h-2 w-2 rounded-full bg-red-500"></span>
-            Closed
-          </span>
-        )}
-        {isOpen === null && (
-          <span className="flex items-center gap-1.5 text-sm font-semibold text-gray-600 dark:text-gray-400">
-            <span className="h-2 w-2 rounded-full bg-gray-400"></span>
-            Hours not available
-          </span>
-        )}
-
+      <div className="glass flex flex-wrap items-center gap-3 border-b border-white/10 px-6 py-4">
         {restaurant.isHalal && (
           <HalalBadge
             isHalal={true}
@@ -288,88 +298,137 @@ export default function PlaceDetail({ restaurant, reviews }: PlaceDetailProps) {
         )}
 
         {restaurant.distance && (
-          <span className="text-sm text-gray-600 dark:text-gray-400">
+          <span className="text-sm text-slate-400">
             📍 {restaurant.distance.toFixed(1)} km away
           </span>
         )}
       </div>
 
-      {/* Must-Try Section */}
-      {restaurant.mustTryDish && (
-        <div className="mx-6 my-6 rounded-2xl border border-teal-200 bg-gradient-to-r from-teal-50 to-teal-50/50 p-6 dark:from-teal-900/30 dark:to-teal-900/20 dark:border-teal-800">
-          <div className="text-xs font-bold uppercase tracking-widest text-teal-700 dark:text-teal-300">
-            ⭐ MUST TRY
+      {/* TripAdvisor Section */}
+      {(restaurant.tripAdvisorRank || restaurant.tripAdvisorPriceText || restaurant.tripAdvisorTags?.length || restaurant.tripAdvisorTopReviewSnippet) && (
+        <div className="glass border-b border-white/10 px-6 py-6">
+          <div className="mb-4 flex items-center gap-2">
+            <Trophy className="h-5 w-5 text-emerald-400" />
+            <h2 className="text-lg font-semibold text-slate-100">
+              TripAdvisor Insights
+            </h2>
           </div>
-          <div className="mt-2 text-xl font-semibold text-gray-900 dark:text-white">
-            {restaurant.mustTryDish}
-          </div>
-          <div className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-            {restaurant.mustTryConfidence}% recommend
+
+          <div className="space-y-4">
+            {/* Ranking */}
+            {restaurant.tripAdvisorRank && (
+              <div className="flex items-center gap-2">
+                <span className="inline-flex items-center gap-1 rounded-xl bg-emerald-500/20 px-3 py-1.5 text-sm font-semibold text-emerald-400 border border-emerald-500/30">
+                  <Trophy className="h-4 w-4" />
+                  {restaurant.tripAdvisorRank}
+                </span>
+              </div>
+            )}
+
+            {/* Price */}
+            {restaurant.tripAdvisorPriceText && (
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-1">
+                  Price Range
+                </div>
+                <div className="text-base font-medium text-emerald-400">
+                  {restaurant.tripAdvisorPriceText}
+                </div>
+              </div>
+            )}
+
+            {/* Tags */}
+            {restaurant.tripAdvisorTags && restaurant.tripAdvisorTags.length > 0 && (
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-2">
+                  Attributes
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {restaurant.tripAdvisorTags.map((tag, index) => (
+                    <span
+                      key={index}
+                      className="rounded-xl bg-surface-solid/50 px-2.5 py-1 text-xs font-medium text-slate-300"
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Review Snippet */}
+            {restaurant.tripAdvisorTopReviewSnippet && (
+              <div>
+                <div className="text-xs font-semibold uppercase tracking-widest text-slate-400 mb-2">
+                  Top Review
+                </div>
+                <p className="text-sm leading-relaxed text-slate-300 italic">
+                  "{restaurant.tripAdvisorTopReviewSnippet}"
+                </p>
+              </div>
+            )}
           </div>
         </div>
       )}
 
-      {/* Operating Hours */}
-      <div className="border-b border-gray-200 bg-white px-6 py-4 dark:border-slate-700 dark:bg-slate-800">
-        {!restaurant.operatingHours || Object.keys(restaurant.operatingHours).length === 0 ? (
-          <div>
-            <h3 className="text-lg font-semibold mb-3 text-gray-900 dark:text-white">
-              Hours
-            </h3>
-            <p className="text-gray-400 dark:text-gray-500 text-sm mb-3">
-              Hours not available in our database
-            </p>
-            <a 
-              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(restaurant.name + ' ' + restaurant.address)}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-teal-500 hover:text-teal-400 dark:text-teal-400 dark:hover:text-teal-300 text-sm font-medium inline-flex items-center gap-1"
-            >
-              📍 Check hours on Google Maps →
-            </a>
+      {/* Must-Try Section */}
+      <div className="glass mx-6 my-6 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-6">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-amber-400">⭐</span>
+          <span className="text-xs font-bold text-amber-400 uppercase tracking-wider">Must Try</span>
+        </div>
+        <h3 className="text-white font-bold text-xl">{dishName}</h3>
+        <p className="text-slate-400 text-sm mt-1">{recommendPhrase}</p>
+      </div>
+
+      {/* Operating Hours - Full Weekly Schedule */}
+      <div className="glass border-b border-white/10 px-6 py-4">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-lg font-bold text-white">Hours</h3>
+          {isEstimated && (
+            <span className="text-xs text-slate-500 italic">Estimated</span>
+          )}
+        </div>
+        
+        {hoursLoading ? (
+          <div className="animate-pulse space-y-2">
+            {[1,2,3,4,5,6,7].map(i => (
+              <div key={i} className="h-4 bg-white/10 rounded w-48" />
+            ))}
+          </div>
+        ) : hours?.weekdayText?.length ? (
+          <div className="space-y-2">
+            {hours.weekdayText.map((dayText: string, index: number) => {
+              const [day, time] = dayText.split(': ');
+              const today = new Date().getDay();
+              const isToday = (index === (today === 0 ? 6 : today - 1));
+              
+              return (
+                <div 
+                  key={index} 
+                  className={`flex justify-between text-sm ${
+                    isToday ? 'text-emerald-400 font-semibold' : 'text-slate-400'
+                  }`}
+                >
+                  <span>{toTitleCase(day)}</span>
+                  <span>{time || 'Closed'}</span>
+                </div>
+              );
+            })}
           </div>
         ) : (
-          <>
-            <h2 className="mb-3 text-lg font-semibold text-gray-900 dark:text-white">
-              Hours
-            </h2>
-            <div className="space-y-2">
-              {dayNames.map((day) => {
-                const hours = restaurant.operatingHours[day.key] || 'Closed';
-                const isCurrentDay = day.key === currentDay;
-
-                return (
-                  <div
-                    key={day.key}
-                    className={`flex items-center justify-between text-sm ${
-                      isCurrentDay
-                        ? 'font-semibold text-teal-600 dark:text-teal-400'
-                        : 'text-gray-600 dark:text-gray-400'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2">
-                      {isCurrentDay && (
-                        <span className="h-2 w-2 rounded-full bg-teal-600 dark:bg-teal-400"></span>
-                      )}
-                      <span>{day.label}</span>
-                    </div>
-                    <span>{hours}</span>
-                  </div>
-                );
-              })}
-            </div>
-          </>
+          <p className="text-slate-500 text-sm">Hours Not Available</p>
         )}
       </div>
 
       {/* Reviews Section */}
-      <div className="bg-white px-6 py-6 dark:bg-slate-800">
-        <h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
+      <div className="glass px-6 py-6">
+        <h2 className="mb-4 text-lg font-semibold text-slate-100">
           Top Reviews
         </h2>
 
         {displayedReviews.length === 0 ? (
-          <p className="text-sm text-gray-500 dark:text-gray-400">
+          <p className="text-sm text-slate-400">
             No reviews yet. Be the first to review!
           </p>
         ) : (
@@ -379,7 +438,7 @@ export default function PlaceDetail({ restaurant, reviews }: PlaceDetailProps) {
                 key={review.id}
                 className={`pb-4 ${
                   index < displayedReviews.length - 1
-                    ? 'border-b border-gray-200 dark:border-slate-700'
+                    ? 'border-b border-white/10'
                     : ''
                 }`}
               >
@@ -387,10 +446,10 @@ export default function PlaceDetail({ restaurant, reviews }: PlaceDetailProps) {
                   <StarRating rating={review.rating} />
                   <SourceBadge source={review.source} />
                 </div>
-                <p className="mb-2 line-clamp-3 text-sm text-gray-700 dark:text-gray-300">
+                <p className="mb-2 line-clamp-3 text-sm text-slate-300">
                   {review.text}
                 </p>
-                <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+                <div className="flex items-center justify-between text-xs text-slate-400">
                   <span>{review.author}</span>
                   <span>{formatDate(review.createdDate)}</span>
                 </div>
@@ -401,10 +460,10 @@ export default function PlaceDetail({ restaurant, reviews }: PlaceDetailProps) {
       </div>
 
       {/* CTA Button - Sticky Bottom */}
-      <div className="sticky bottom-0 border-t border-gray-200 bg-white px-6 pb-6 pt-4 dark:border-slate-700 dark:bg-slate-800">
+      <div className="glass sticky bottom-0 border-t border-white/10 px-6 pb-6 pt-4">
         <button
           onClick={handleGetDirections}
-          className="w-full rounded-2xl bg-teal-600 py-4 text-lg font-semibold text-white transition-colors hover:bg-teal-700 dark:bg-teal-500 dark:hover:bg-teal-600"
+          className="w-full rounded-2xl bg-emerald-500 py-4 text-lg font-semibold text-white transition-colors hover:bg-emerald-600"
         >
           Get Directions
         </button>

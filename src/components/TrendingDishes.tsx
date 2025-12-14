@@ -3,6 +3,7 @@
 import Image from 'next/image';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { Heart } from 'lucide-react';
 import { TrendingDish, ApiResponse } from '@/types';
 import HalalBadge from './HalalBadge';
 
@@ -84,10 +85,10 @@ export default function TrendingDishes() {
     return (
       <section className="px-4 py-6">
         <div className="mb-6">
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+          <h2 className="text-2xl font-bold text-slate-100">
             🔥 Trending Now
           </h2>
-          <p className="mt-1 text-xs uppercase tracking-widest text-gray-500 dark:text-gray-400">
+          <p className="mt-1 text-xs uppercase tracking-widest text-slate-400">
             Updated hourly
           </p>
         </div>
@@ -95,15 +96,15 @@ export default function TrendingDishes() {
           {[1, 2, 3].map((i) => (
             <div
               key={i}
-              className="animate-pulse overflow-hidden rounded-2xl bg-white shadow-sm dark:bg-slate-800"
+              className="glass animate-pulse overflow-hidden rounded-2xl"
             >
-              <div className="h-40 w-full bg-gray-200 dark:bg-slate-700" />
+              <div className="h-40 w-full bg-surface-solid/50" />
               <div className="p-4">
-                <div className="mb-2 h-5 w-3/4 rounded bg-gray-200 dark:bg-slate-700" />
-                <div className="mb-3 h-4 w-1/2 rounded bg-gray-200 dark:bg-slate-700" />
+                <div className="mb-2 h-5 w-3/4 rounded bg-surface-solid/50" />
+                <div className="mb-3 h-4 w-1/2 rounded bg-surface-solid/50" />
                 <div className="flex justify-between">
-                  <div className="h-4 w-20 rounded bg-gray-200 dark:bg-slate-700" />
-                  <div className="h-4 w-24 rounded bg-gray-200 dark:bg-slate-700" />
+                  <div className="h-4 w-20 rounded bg-surface-solid/50" />
+                  <div className="h-4 w-24 rounded bg-surface-solid/50" />
                 </div>
               </div>
             </div>
@@ -118,18 +119,18 @@ export default function TrendingDishes() {
     return (
       <section className="px-4 py-6">
         <div className="mb-6">
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+          <h2 className="text-2xl font-bold text-slate-100">
             🔥 Trending Now
           </h2>
-          <p className="mt-1 text-xs uppercase tracking-widest text-gray-500 dark:text-gray-400">
+          <p className="mt-1 text-xs uppercase tracking-widest text-slate-400">
             Updated hourly
           </p>
         </div>
-        <div className="rounded-2xl bg-red-50 p-6 text-center dark:bg-red-900/20">
-          <p className="mb-4 text-red-700 dark:text-red-300">{state.error}</p>
+        <div className="glass rounded-2xl p-6 text-center border border-red-500/20 bg-red-500/10">
+          <p className="mb-4 text-red-400">{state.error}</p>
           <button
             onClick={fetchTrendingDishes}
-            className="rounded-xl bg-teal-600 px-6 py-2 text-sm font-semibold text-white transition-colors hover:bg-teal-700 dark:bg-teal-500 dark:hover:bg-teal-600"
+            className="rounded-xl bg-emerald-500 px-6 py-2 text-sm font-semibold text-white transition-colors hover:bg-emerald-600"
           >
             Retry
           </button>
@@ -143,15 +144,15 @@ export default function TrendingDishes() {
     return (
       <section className="px-4 py-6">
         <div className="mb-6">
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+          <h2 className="text-2xl font-bold text-slate-100">
             🔥 Trending Now
           </h2>
-          <p className="mt-1 text-xs uppercase tracking-widest text-gray-500 dark:text-gray-400">
+          <p className="mt-1 text-xs uppercase tracking-widest text-slate-400">
             Updated hourly
           </p>
         </div>
-        <div className="rounded-2xl bg-gray-50 p-8 text-center dark:bg-slate-800">
-          <p className="text-gray-600 dark:text-gray-400">
+        <div className="glass rounded-2xl p-8 text-center">
+          <p className="text-slate-400">
             No trending dishes right now. Check back soon! 🍜
           </p>
         </div>
@@ -195,6 +196,12 @@ function DishCard({
   onKeyDown: (e: React.KeyboardEvent) => void;
 }) {
   const [imageError, setImageError] = useState(false);
+  const [isLiked, setIsLiked] = useState(false);
+
+  const handleHeartClick = (e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent card click when clicking heart
+    setIsLiked(!isLiked);
+  };
 
   return (
     <div
@@ -203,10 +210,10 @@ function DishCard({
       role="button"
       tabIndex={0}
       aria-label={`View ${dish.dishName} at ${dish.restaurantName || 'restaurant'}`}
-      className="group cursor-pointer overflow-hidden rounded-2xl bg-white shadow-sm transition-shadow hover:shadow-md dark:bg-slate-800"
+      className="glass group cursor-pointer overflow-hidden rounded-2xl transition-all hover:shadow-lg"
     >
-      {/* Image */}
-      <div className="relative h-40 w-full overflow-hidden bg-gray-100 dark:bg-slate-700">
+      {/* Image Container with 4:3 Aspect Ratio */}
+      <div className="relative aspect-[4/3] w-full overflow-hidden bg-surface-solid/50">
         {dish.photoUrl && !imageError ? (
           <Image
             src={dish.photoUrl}
@@ -221,48 +228,49 @@ function DishCard({
             🍽️
           </div>
         )}
+
+        {/* Gradient Overlay - transparent to black/80 at bottom */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent pointer-events-none" />
+
+        {/* Heart Icon Button - Top Right */}
+        <button
+          onClick={handleHeartClick}
+          className="absolute top-3 right-3 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-black/40 backdrop-blur-sm text-white transition-all hover:bg-black/60 hover:scale-110"
+          aria-label={isLiked ? 'Remove from favorites' : 'Add to favorites'}
+        >
+          <Heart
+            className={`h-5 w-5 transition-all ${
+              isLiked ? 'fill-rose-500 text-rose-500' : 'text-white'
+            }`}
+          />
+        </button>
+
+        {/* Title and Price - Inside Image at Bottom */}
+        <div className="absolute bottom-0 left-0 right-0 z-10 p-4">
+          <div className="flex items-end justify-between gap-3">
+            {/* Title */}
+            <h3 className="flex-1 text-xl font-bold text-white drop-shadow-lg line-clamp-2">
+              {dish.dishName}
+            </h3>
+            {/* Price */}
+            {dish.price > 0 && (
+              <span className="shrink-0 rounded-xl bg-white/90 backdrop-blur-sm px-3 py-1.5 text-sm font-bold text-slate-900">
+                RM {dish.price.toFixed(0)}
+              </span>
+            )}
+          </div>
+        </div>
       </div>
 
-      {/* Content */}
-      <div className="p-4">
-        {/* Dish name + Price */}
-        <div className="mb-2 flex items-start justify-between gap-2">
-          <h3 className="flex-1 text-lg font-semibold text-gray-900 dark:text-white">
-            {dish.dishName}
-          </h3>
-          {dish.price > 0 && (
-            <span className="shrink-0 rounded-full bg-teal-100 px-2.5 py-1 text-xs font-semibold text-teal-700 dark:bg-teal-900/30 dark:text-teal-300">
-              RM {dish.price.toFixed(0)}
-            </span>
-          )}
-        </div>
-
-        {/* Description */}
-        {dish.description && (
-          <p className="mb-3 line-clamp-2 text-sm text-gray-600 dark:text-gray-400">
-            {dish.description}
-          </p>
-        )}
-
-        {/* Restaurant row */}
-        <div className="mb-3 flex items-center justify-between gap-2">
-          <span className="text-sm text-gray-600 dark:text-gray-400">
-            {dish.restaurantName || 'Restaurant'}
-          </span>
-          {dish.restaurantIsHalal && (
-            <HalalBadge isHalal={true} size="sm" />
-          )}
-        </div>
-
-        {/* Stats */}
-        <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <span className="inline-flex items-center rounded-full bg-pink-100 px-2.5 py-1 text-xs font-semibold text-pink-700 dark:bg-pink-900/30 dark:text-pink-300">
-            🚀 {dish.mentionCount} mentions
-          </span>
-          <span className="text-sm font-semibold text-teal-600 dark:text-teal-400">
-            {dish.recommendPercentage}% recommend
-          </span>
-        </div>
+      {/* Minimal Footer - Secondary Info */}
+      <div className="flex items-center justify-between gap-2 px-4 py-3 border-t border-white/10">
+        <span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-400">
+          <span>🚀</span>
+          <span>{dish.mentionCount} mentions</span>
+        </span>
+        <span className="text-xs font-semibold text-emerald-400">
+          {dish.recommendPercentage}% recommend
+        </span>
       </div>
     </div>
   );
