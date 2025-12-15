@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { FilterState } from '@/types';
 import { useDebounce } from '@/hooks/useDebounce';
+import { SlidersHorizontal, Check, Sparkles } from 'lucide-react';
 
 interface FilterBarProps {
   filters: FilterState;
@@ -10,6 +11,7 @@ interface FilterBarProps {
   onNearMeClick?: () => void;
   view?: 'map' | 'list';
   onViewToggle?: () => void;
+  isDrawerOpen?: boolean; // For mobile: hide filter buttons when drawer is open
 }
 
 const categories = [
@@ -31,6 +33,7 @@ export default function FilterBar({
   onNearMeClick,
   view = 'map',
   onViewToggle,
+  isDrawerOpen = false,
 }: FilterBarProps) {
   const [searchValue, setSearchValue] = useState(filters.searchQuery || '');
   const debouncedSearch = useDebounce(searchValue, 300);
@@ -90,7 +93,12 @@ export default function FilterBar({
     onFilterChange({ ...filters, halal: !filters.halal });
   };
 
-  // Get active filters count
+  // Toggle editorial picks filter
+  const handleEditorialPicksToggle = () => {
+    onFilterChange({ ...filters, editorialPicks: !filters.editorialPicks });
+  };
+
+  // Get active filters count (excluding editorialPicks as it has its own button)
   const activeFilters = [
     filters.nearMe && 'nearMe',
     filters.openNow && 'openNow',
@@ -134,7 +142,7 @@ export default function FilterBar({
     }
   }, [filtersOpen]);
 
-  // Clear all filters
+  // Clear all filters (excluding editorialPicks as it has its own button)
   const handleClearAll = () => {
     onFilterChange({
       ...filters,
@@ -149,9 +157,9 @@ export default function FilterBar({
     <div className="w-full">
       {/* Floating Search Bar Island */}
       <div className="w-full">
-        <div className="glass search-bar relative flex items-center rounded-full shadow-xl border-0 w-full">
+        <div className="search-bar relative flex items-center rounded-full shadow-xl border-0 w-full bg-[#022c22] backdrop-blur-sm border border-[#34d399]/20">
           {/* Search Icon - Left */}
-          <div className="absolute left-5 pointer-events-none text-slate-400">
+          <div className="absolute left-5 pointer-events-none text-slate-300">
             <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
@@ -181,7 +189,7 @@ export default function FilterBar({
             {searchValue && (
               <button
                 onClick={handleClearSearch}
-                className="flex h-8 w-8 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-surface-solid/50 hover:text-slate-200"
+                className="flex h-8 w-8 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-[#34d399]/20 hover:text-slate-100"
                 aria-label="Clear search"
               >
                 <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -205,6 +213,7 @@ export default function FilterBar({
         </div>
 
         {/* Mobile: Horizontal Scrollable Filter Buttons */}
+        {!isDrawerOpen && (
         <div 
           className="md:hidden mt-4 pb-3 filter-buttons-scroll"
           style={{
@@ -228,10 +237,10 @@ export default function FilterBar({
               <button
                 key={filter.id}
                 onClick={() => toggleFilter(filter.id)}
-                className={`flex-shrink-0 whitespace-nowrap px-3 py-1.5 rounded-full text-sm font-medium transition-all duration-200 ${
+                className={`flex-shrink-0 whitespace-nowrap px-3 py-1.5 rounded-full text-sm font-medium transition-all duration-200 border-2 ${
                   isFilterActive(filter.id)
-                    ? 'bg-emerald-500 text-white'
-                    : 'bg-surface-solid/50 text-slate-300 hover:bg-surface-solid'
+                    ? 'bg-emerald-500 text-white border-[#34d399]'
+                    : 'bg-[#f8fafc] text-black border-[#34d399] hover:bg-[#34d399]/10'
                 }`}
                 aria-label={`Filter by ${filter.label}`}
                 aria-pressed={isFilterActive(filter.id)}
@@ -244,59 +253,93 @@ export default function FilterBar({
             ))}
           </div>
         </div>
+        )}
 
-        {/* Desktop: Dropdown Filter Menu */}
-        <div className="hidden md:block px-4 pb-3 relative" ref={dropdownRef}>
+        {/* Desktop: Editorial Picks & Filter Buttons */}
+        <div className="hidden md:flex items-center gap-3 mt-4 mb-2">
+          {/* Editorial Picks Button */}
           <button
-            onClick={() => setFiltersOpen(!filtersOpen)}
-            className="flex items-center gap-2 px-4 py-2 bg-surface-solid/50 rounded-full text-slate-300 text-sm hover:bg-surface-solid transition-colors border border-white/20"
-            aria-label="Toggle filters"
-            aria-expanded={filtersOpen}
+            onClick={handleEditorialPicksToggle}
+            className={`flex items-center gap-2 px-5 py-2.5 rounded-full shadow-lg transition-all relative overflow-hidden ${
+              filters.editorialPicks
+                ? 'bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-600 text-white shadow-[0_0_20px_rgba(251,191,36,0.5)]'
+                : 'bg-gradient-to-r from-amber-600/80 to-yellow-600/80 text-white hover:from-amber-500 hover:to-yellow-500'
+            }`}
+            aria-label="Toggle editor's picks"
+            aria-pressed={filters.editorialPicks}
           >
-            <span>🔽</span>
-            <span>Filters</span>
-            {activeFilters.length > 0 && (
-              <span className="bg-emerald-500 text-white text-xs px-2 py-0.5 rounded-full">
-                {activeFilters.length}
+            {/* Shine effect overlay - only when active */}
+            {filters.editorialPicks && (
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shine pointer-events-none" />
+            )}
+            <Sparkles className={`w-4 h-4 text-white relative z-10 ${filters.editorialPicks ? 'drop-shadow-[0_0_4px_rgba(255,255,255,0.8)]' : ''}`} />
+            <span className="font-semibold relative z-10">Editor's Picks</span>
+            {filters.editorialPicks && (
+              <span className="bg-emerald-500 text-white text-xs px-2 py-0.5 rounded-full relative z-10 font-bold">
+                70
               </span>
             )}
           </button>
+
+          {/* Filters Button */}
+          <div className="relative" ref={dropdownRef}>
+            <button
+              onClick={() => setFiltersOpen(!filtersOpen)}
+              className="flex items-center gap-2 px-5 py-2.5 bg-[#022c22] text-white rounded-full shadow-lg hover:bg-[#064e3b] transition-all"
+              aria-label="Toggle filters"
+              aria-expanded={filtersOpen}
+            >
+              <SlidersHorizontal className="w-4 h-4 text-white" />
+              <span>Filters</span>
+              {activeFilters.length > 0 && (
+                <span className="bg-emerald-500 text-white text-xs px-2 py-0.5 rounded-full">
+                  {activeFilters.length}
+                </span>
+              )}
+            </button>
           
           {/* Dropdown menu */}
           {filtersOpen && (
-            <div className="absolute top-full left-4 mt-2 bg-slate-800 rounded-xl shadow-xl border border-slate-700 py-2 z-50 min-w-[200px]">
+            <div 
+              className="absolute top-full mt-2 bg-[#022c22]/95 backdrop-blur-xl border border-[#34d399]/20 shadow-2xl shadow-emerald-950/50 rounded-2xl p-3 z-50 min-w-[200px] origin-top-left animate-fade-in-slide-down"
+            >
               {filterOptions.map((filter) => (
                 <button
                   key={filter.id}
                   onClick={() => toggleFilter(filter.id)}
-                  className={`w-full text-left px-4 py-2 hover:bg-slate-700 flex items-center gap-3 transition-colors ${
-                    isFilterActive(filter.id) ? 'text-emerald-400' : 'text-white'
+                  className={`flex items-center justify-between p-3 rounded-xl cursor-pointer transition-colors font-medium text-sm ${
+                    isFilterActive(filter.id)
+                      ? 'text-white bg-white/20'
+                      : 'text-slate-300 hover:bg-white/10'
                   }`}
                   aria-label={`Toggle ${filter.label} filter`}
                   aria-pressed={isFilterActive(filter.id)}
                 >
-                  <span>{filter.icon}</span>
-                  <span>{filter.label}</span>
+                  <div className="flex items-center gap-3">
+                    <span className="text-[#34d399]">{filter.icon}</span>
+                    <span>{filter.label}</span>
+                  </div>
                   {isFilterActive(filter.id) && (
-                    <span className="ml-auto">✓</span>
+                    <Check className="w-4 h-4 text-[#34d399] flex-shrink-0" />
                   )}
                 </button>
               ))}
               
               {activeFilters.length > 0 && (
                 <>
-                  <div className="border-t border-slate-700 my-2" />
+                  <div className="border-t border-[#34d399]/30 my-2" />
                   <button
                     onClick={handleClearAll}
-                    className="w-full text-left px-4 py-2 text-red-400 hover:bg-slate-700 transition-colors"
+                    className="w-full flex items-center justify-between p-3 rounded-xl text-red-400 hover:bg-white/10 cursor-pointer transition-colors font-medium text-sm"
                     aria-label="Clear all filters"
                   >
-                    Clear All
+                    <span>Clear All</span>
                   </button>
                 </>
               )}
             </div>
           )}
+          </div>
         </div>
       </div>
     </div>

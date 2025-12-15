@@ -77,18 +77,18 @@ export default function RestaurantCard({
       role="button"
       tabIndex={0}
       aria-label={`View details for ${restaurant.name}`}
-      className={`flex flex-row items-center gap-3 rounded-2xl bg-white dark:bg-slate-900 p-3 shadow-sm cursor-pointer transition-all duration-200 hover:bg-gray-50 dark:hover:bg-slate-800 ${
+      className={`flex flex-row items-center gap-3 rounded-2xl bg-[#022c22] p-3 cursor-pointer transition-all duration-200 ${
         isSelected 
-          ? 'ring-2 ring-emerald-500' 
+          ? 'ring-2 ring-[#34d399]' 
           : isHovered 
-          ? 'ring-2 ring-emerald-400/50' 
+          ? 'ring-2 ring-[#34d399]/50' 
           : ''
       }`}
     >
       {/* Left: Image */}
       <div 
         ref={imgRef}
-        className="relative h-32 w-32 flex-shrink-0 overflow-hidden rounded-xl bg-gray-100 dark:bg-slate-800"
+        className="relative h-32 w-32 flex-shrink-0 overflow-hidden rounded-xl bg-slate-800"
       >
         {shouldLoad && thumbnailUrl && !imageError ? (
           <Image
@@ -97,6 +97,7 @@ export default function RestaurantCard({
             fill
             sizes="128px"
             className="object-cover"
+            priority={index < 3}
             onError={() => setImageError(true)}
           />
         ) : (
@@ -109,19 +110,23 @@ export default function RestaurantCard({
       {/* Right: Content */}
       <div className="flex flex-1 flex-col gap-2 min-w-0">
         {/* Title - Bold on top */}
-        <h3 className="line-clamp-2 text-base font-bold text-gray-900 dark:text-slate-100">
+        <h3 className="line-clamp-2 text-base font-bold text-slate-100 font-serif tracking-tight">
           {restaurant.name}
         </h3>
 
-        {/* Price Pill - Below title */}
-        {displayPriceText && (
-          <div className="inline-flex w-fit items-center rounded-full bg-emerald-100 dark:bg-emerald-500/20 px-2.5 py-0.5 text-xs font-medium text-emerald-700 dark:text-emerald-400">
+        {/* Price Pill or TripAdvisor Badge - Below title */}
+        {displayPriceText ? (
+          <div className="inline-flex w-fit items-center rounded-full bg-emerald-500/20 px-2.5 py-0.5 text-xs font-medium text-[#34d399]">
             {displayPriceText}
           </div>
-        )}
+        ) : tripAdvisorData ? (
+          <div className="inline-flex w-fit items-center rounded-full bg-blue-500/20 px-2.5 py-0.5 text-xs font-medium text-blue-400">
+            ✓ Tripadvisor listed
+          </div>
+        ) : null}
 
         {/* Footer: Mentions/Match Stats - Muted grey */}
-        <div className="flex items-center gap-3 text-xs text-gray-500 dark:text-slate-400">
+        <div className="flex items-center gap-3 text-xs text-slate-400">
           {/* Mentions */}
           {reviewCount > 0 && (
             <span>
@@ -133,7 +138,7 @@ export default function RestaurantCard({
           {restaurant.aggregateRating != null && (
             <>
               {reviewCount > 0 && <span>•</span>}
-              <span className="flex items-center gap-1">
+              <span className="flex items-center gap-1 text-[#fbbf24]">
                 <span>⭐</span>
                 <span>{restaurant.aggregateRating.toFixed(1)}</span>
               </span>

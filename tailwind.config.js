@@ -8,7 +8,8 @@ module.exports = {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['var(--font-plus-jakarta)', 'var(--font-inter)', 'system-ui', 'sans-serif'],
+        sans: ['var(--font-dm-sans)', 'system-ui', 'sans-serif'],
+        serif: ['var(--font-playfair)', 'serif'],
       },
       colors: {
         background: '#0f172a', // Slate 950
@@ -19,6 +20,15 @@ module.exports = {
         accent: {
           viral: '#f43f5e', // Rose 500 for Love/Viral actions
           match: '#10b981', // Emerald 500 for high match scores
+        },
+        // Luxury Editorial Theme Colors
+        pearl: '#f8fafc', // A very light slate/white
+        emerald: {
+          rich: '#022c22', // The darkest green for cards
+          light: '#34d399', // Bright green for highlights
+        },
+        gold: {
+          accent: '#fbbf24', // Amber for stars
         },
       },
       borderRadius: {

@@ -70,6 +70,7 @@ export interface FilterState {
   priceRange: string | null;
   halal: boolean;
   searchQuery: string;
+  editorialPicks: boolean;
 }
 
 export interface ApiResponse<T> {

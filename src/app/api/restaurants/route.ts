@@ -67,8 +67,8 @@ export async function GET(req: NextRequest) {
     const openNow = searchParams.get('openNow') === 'true';
     const priceRange = searchParams.get('priceRange');
     const trending = searchParams.get('trending') === 'true';
-    // When halal filter is on, fetch all restaurants to check all 500+ for non-halal indicators
-    const limit = halal ? 1000 : parseInt(searchParams.get('limit') || '200');
+    // Fetch all restaurants (540+) - use high limit to accommodate all restaurants
+    const limit = parseInt(searchParams.get('limit') || '1000');
 
     const supabase = createClient();
 

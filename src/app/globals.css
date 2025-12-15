@@ -138,6 +138,36 @@ a:focus-visible {
   animation: shimmer 2s ease-in-out infinite;
 }
 
+/* Fade in and slide down animation for dropdown */
+@keyframes fadeInSlideDown {
+  0% {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.95);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-fade-in-slide-down {
+  animation: fadeInSlideDown 0.2s ease-out;
+}
+
+/* Shine animation for golden buttons */
+@keyframes shine {
+  0% {
+    transform: translateX(-100%) skewX(-15deg);
+  }
+  100% {
+    transform: translateX(200%) skewX(-15deg);
+  }
+}
+
+.animate-shine {
+  animation: shine 2s ease-in-out infinite;
+}
+
 /* Fix Next.js portal positioning issues - target custom element */
 nextjs-portal {
   position: relative !important;
@@ -167,6 +197,12 @@ body > nextjs-portal:not(script > nextjs-portal) {
   position: relative;
   width: auto;
   height: auto;
+}
+
+/* Ensure head element is never visible (prevent flashing) */
+head {
+  display: none !important;
+  visibility: hidden !important;
 }
 
 /* Remove all focus outlines from inputs */

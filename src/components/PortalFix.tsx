@@ -35,16 +35,27 @@ export default function PortalFix() {
     fixPortals();
 
     // Watch for new portals (Next.js dev tools might add them dynamically)
+    // Use a debounced approach to avoid excessive calls
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
     const observer = new MutationObserver(() => {
-      fixPortals();
+      // Debounce to prevent excessive calls that might cause flashing
+      if (timeoutId) clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        fixPortals();
+      }, 100);
     });
 
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true,
-    });
+    // Only observe body, not head, to prevent head flashing
+    if (document.body) {
+      observer.observe(document.body, {
+        childList: true,
+        subtree: true,
+        // Don't watch for attribute changes to reduce noise
+      });
+    }
 
     return () => {
+      clearTimeout(timeoutId);
       observer.disconnect();
     };
   }, []);

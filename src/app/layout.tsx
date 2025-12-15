@@ -1,20 +1,20 @@
 import type { Metadata, Viewport } from 'next';
-import { Plus_Jakarta_Sans, Inter } from 'next/font/google';
+import { Playfair_Display, DM_Sans } from 'next/font/google';
 import './globals.css';
 import { ToastProvider } from '@/contexts/ToastContext';
 import { HoursProvider } from '@/contexts/HoursContext';
 import ToastContainer from '@/components/ToastContainer';
 import PortalFix from '@/components/PortalFix';
 
-const plusJakartaSans = Plus_Jakarta_Sans({
+const playfairDisplay = Playfair_Display({
   subsets: ['latin'],
-  variable: '--font-plus-jakarta',
+  variable: '--font-playfair',
   display: 'swap',
 });
 
-const inter = Inter({
+const dmSans = DM_Sans({
   subsets: ['latin'],
-  variable: '--font-inter',
+  variable: '--font-dm-sans',
   display: 'swap',
 });
 
@@ -64,9 +64,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark" suppressHydrationWarning>
+    <html lang="en" className="dark" suppressHydrationWarning data-scroll-behavior="smooth">
       <body
-        className={`${plusJakartaSans.variable} ${inter.variable} bg-slate-950 font-sans text-slate-100 antialiased`}
+        className={`${playfairDisplay.variable} ${dmSans.variable} bg-slate-950 font-sans text-slate-100 antialiased`}
       >
         <ToastProvider>
           <HoursProvider>

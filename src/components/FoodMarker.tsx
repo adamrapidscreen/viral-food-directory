@@ -1,10 +1,14 @@
 'use client';
 
+import { memo } from 'react';
 import { AdvancedMarker } from '@vis.gl/react-google-maps';
-import { MapMarker } from '@/types';
+import { MapMarker, Restaurant } from '@/types';
+import { UtensilsCrossed, Coffee } from 'lucide-react';
+import { getTripAdvisorData } from '@/services/tripAdvisor';
 
 interface FoodMarkerProps {
   place: MapMarker;
+  restaurant: Restaurant | null;
   isSelected: boolean;
   isHovered?: boolean;
   onClick: () => void;
@@ -12,40 +16,32 @@ interface FoodMarkerProps {
   onHoverEnd?: () => void;
 }
 
-// Category emoji mapping
-const categoryEmoji: Record<MapMarker['category'], string> = {
-  hawker: '🍜',
-  restaurant: '🍽️',
-  cafe: '☕',
-  foodcourt: '🏪',
+// Category icon mapping using Lucide React icons
+const categoryIcons: Record<'restaurant' | 'cafe', React.ComponentType<{ className?: string }>> = {
+  restaurant: UtensilsCrossed,
+  cafe: Coffee,
 };
 
-// Get marker color based on rating and trending score
-function getMarkerColor(place: MapMarker): string {
-  if (place.trendingScore > 75) {
-    return '#EC4899'; // Pink
-  }
-  if (place.rating >= 4.5) {
-    return '#0D9488'; // Teal
-  }
-  if (place.rating >= 4.0) {
-    return '#10B981'; // Green
-  }
-  return '#F59E0B'; // Amber
-}
-
-export default function FoodMarker({
+function FoodMarker({
   place,
+  restaurant,
   isSelected,
   isHovered,
   onClick,
   onHover,
   onHoverEnd,
 }: FoodMarkerProps) {
-  const color = getMarkerColor(place);
-  const emoji = categoryEmoji[place.category];
-  const showFireBadge = place.trendingScore > 75;
-  const showHalalRing = place.isHalal;
+  // Use restaurant icon as fallback for hawker/foodcourt
+  const CategoryIcon = categoryIcons[place.category] || categoryIcons.restaurant;
+  
+  // Get price data for active state
+  const tripAdvisorData = restaurant ? getTripAdvisorData(restaurant.name) : null;
+  const displayPriceText = tripAdvisorData?.priceText || restaurant?.tripAdvisorPriceText;
+  
+  // Extract first price value (e.g., "RM 15 - RM 25" -> "RM 15")
+  const pricePillText = displayPriceText 
+    ? displayPriceText.split('-')[0].trim() 
+    : null;
 
   return (
     <AdvancedMarker
@@ -53,49 +49,50 @@ export default function FoodMarker({
       onClick={onClick}
     >
       <div
-        className={`relative flex items-center justify-center transition-all duration-300 ease-out ${
-          isSelected ? 'scale-125' : isHovered ? 'scale-115' : 'scale-100'
-        } ${
-          isSelected 
-            ? 'ring-2 ring-emerald-500 ring-offset-2' 
-            : isHovered 
-            ? 'ring-2 ring-emerald-400 ring-offset-1' 
-            : ''
+        className={`relative flex items-center justify-center transition-all duration-300 ease-out cursor-pointer ${
+          isHovered ? 'scale-[1.2]' : 'scale-100'
         }`}
-        style={{ width: '48px', height: '48px' }}
+        style={{ width: '32px', height: '32px' }}
         onMouseEnter={onHover}
         onMouseLeave={onHoverEnd}
       >
-        {/* Halal ring */}
-        {showHalalRing && (
-          <div
-            className="absolute inset-0 rounded-full border-2 border-green-600"
-            style={{ width: '48px', height: '48px' }}
-          />
-        )}
-
-        {/* Main circular pin */}
+        {/* Minimal Pin Circle */}
         <div
-          className="flex items-center justify-center rounded-full text-2xl shadow-md"
+          className={`flex items-center justify-center rounded-full border-2 border-white transition-all duration-300 ${
+            isHovered ? 'bg-black' : 'bg-[#022c22]'
+          } ${isSelected ? 'ring-2 ring-[#34d399] ring-offset-1' : ''}`}
           style={{
-            width: '48px',
-            height: '48px',
-            backgroundColor: color,
+            width: '32px',
+            height: '32px',
           }}
         >
-          {emoji}
+          {/* Active State: Show Price Pill */}
+          {isSelected && pricePillText ? (
+            <span className="text-[10px] font-medium text-white px-1.5 py-0.5 whitespace-nowrap">
+              {pricePillText}
+            </span>
+          ) : (
+            /* Default State: Show Category Icon */
+            <CategoryIcon className="w-4 h-4 text-white" />
+          )}
         </div>
-
-        {/* Fire badge for trending */}
-        {showFireBadge && (
-          <div
-            className="absolute -right-1 -top-1 flex items-center justify-center rounded-full bg-pink-500 text-xs"
-            style={{ width: '20px', height: '20px' }}
-          >
-            🔥
-          </div>
-        )}
       </div>
     </AdvancedMarker>
   );
 }
+
+// Memoize the component to prevent unnecessary re-renders
+// Returns true if props are equal (skip re-render), false if different (re-render)
+export default memo(FoodMarker, (prevProps, nextProps) => {
+  // Check if all relevant props are equal - if so, skip re-render
+  const propsEqual = 
+    prevProps.place.id === nextProps.place.id &&
+    prevProps.place.lat === nextProps.place.lat &&
+    prevProps.place.lng === nextProps.place.lng &&
+    prevProps.isSelected === nextProps.isSelected &&
+    prevProps.isHovered === nextProps.isHovered &&
+    prevProps.restaurant?.id === nextProps.restaurant?.id &&
+    prevProps.restaurant?.tripAdvisorPriceText === nextProps.restaurant?.tripAdvisorPriceText;
+  
+  return propsEqual; // true = skip re-render, false = re-render
+});

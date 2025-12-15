@@ -7,6 +7,8 @@ import { useDebounce } from '@/hooks/useDebounce';
 import { useToast } from '@/contexts/ToastContext';
 import { AnimatePresence } from 'framer-motion';
 import { List } from 'lucide-react';
+import { calculateDistance } from '@/lib/utils';
+import { getTripAdvisorData } from '@/services/tripAdvisor';
 import Map from '@/components/Map';
 import MapModal from '@/components/MapModal';
 import RestaurantCard from '@/components/RestaurantCard';
@@ -22,6 +24,7 @@ const DEFAULT_FILTERS: FilterState = {
   priceRange: null,
   halal: false,
   searchQuery: '',
+  editorialPicks: false,
 };
 
 const KUALA_LUMPUR_LOCATION = { latitude: 3.139, longitude: 101.6869 };
@@ -68,6 +71,12 @@ export default function HomePage() {
     return { lat: userLocation.latitude, lng: userLocation.longitude };
   }, [userLocation]);
 
+  // Memoize user location coordinates to prevent recalculation
+  const userLocationCoords = useMemo(() => {
+    if (!userLocation) return null;
+    return { lat: userLocation.latitude, lng: userLocation.longitude };
+  }, [userLocation]);
+
   // Debounce filters to avoid excessive API calls
   const debouncedFilters = useDebounce(filters, 300);
 
@@ -107,7 +116,8 @@ export default function HomePage() {
       if (data.error) {
         setError(data.error);
       } else {
-        setRestaurants(data.data || []);
+        const fetchedRestaurants = data.data || [];
+        setRestaurants(fetchedRestaurants);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch restaurants');
@@ -120,6 +130,37 @@ export default function HomePage() {
   useEffect(() => {
     fetchRestaurants();
   }, [fetchRestaurants]);
+
+  // Memoize filtered and sorted restaurants (must be defined before handlers that use it)
+  const filteredRestaurants = useMemo(() => {
+    let result = [...restaurants];
+
+    // Filter by Editorial Picks (dual verified - has TripAdvisor data)
+    if (filters.editorialPicks) {
+      result = result.filter((restaurant) => {
+        const tripAdvisorData = getTripAdvisorData(restaurant.name);
+        return tripAdvisorData !== null; // Only show restaurants with TripAdvisor data
+      });
+    }
+
+    // If "Near Me" is active and we have user location, sort by distance
+    if (filters.nearMe && userLocationCoords) {
+      // Calculate distance for each restaurant and sort
+      result = result
+        .map((restaurant) => ({
+          ...restaurant,
+          distance: calculateDistance(
+            userLocationCoords.lat,
+            userLocationCoords.lng,
+            restaurant.lat,
+            restaurant.lng
+          ),
+        }))
+        .sort((a, b) => (a.distance || Infinity) - (b.distance || Infinity));
+    }
+
+    return result;
+  }, [restaurants, filters.nearMe, filters.editorialPicks, userLocationCoords]);
 
   // Scroll to selected card in list view
   useEffect(() => {
@@ -134,17 +175,17 @@ export default function HomePage() {
   }, [selectedId, view]);
 
   // Handle card click
-  const handleCardClick = (id: string) => {
+  const handleCardClick = useCallback((id: string) => {
     setSelectedId(id);
     // Fly map to restaurant location
-    const restaurant = restaurants.find((r) => r.id === id);
+    const restaurant = filteredRestaurants.find((r) => r.id === id);
     if (restaurant) {
       setMapCenter({ lat: restaurant.lat, lng: restaurant.lng });
     }
     if (view === 'list') {
       // Scroll will be handled by useEffect
     }
-  };
+  }, [filteredRestaurants, view]);
 
   // Handle card hover
   const handleCardHover = (id: string | null) => {
@@ -227,7 +268,7 @@ export default function HomePage() {
       {/* Map - Absolute Background Layer */}
       <div className="absolute inset-0 w-full h-full" style={{ pointerEvents: 'auto' }}>
         <Map
-          restaurants={restaurants}
+          restaurants={filteredRestaurants}
           selectedId={selectedId}
           hoveredId={hoveredId}
           onSelectRestaurant={handleMarkerClick}
@@ -239,7 +280,7 @@ export default function HomePage() {
       </div>
 
       {/* Desktop: Floating Sidebar */}
-      <div className="hidden md:flex absolute left-0 top-0 h-full md:w-[320px] lg:w-[360px] flex-shrink-0 z-10 bg-slate-950/95 backdrop-blur-sm shadow-xl rounded-r-2xl flex-col" style={{ overflowY: 'hidden', overflowX: 'visible' }}>
+      <div className="hidden md:flex absolute left-0 top-0 h-full md:w-[320px] lg:w-[360px] flex-shrink-0 z-10 bg-pearl/90 backdrop-blur-xl border border-white/40 shadow-[0_8px_32px_rgba(0,0,0,0.05)] rounded-r-2xl flex-col" style={{ overflowY: 'hidden', overflowX: 'visible' }}>
         {/* Search Bar Header - Fixed at Top */}
         <div className="flex-shrink-0 p-4 border-b border-white/10">
           <FilterBar 
@@ -252,7 +293,7 @@ export default function HomePage() {
           
           {/* Halal Filter Badge */}
           {filters.halal && (
-            <div className="mt-4 flex items-center justify-between rounded-xl px-4 py-2 text-sm font-medium text-emerald-400 border border-emerald-500/20 bg-emerald-500/10">
+            <div className="mt-4 flex items-center justify-between rounded-xl px-4 py-2 text-sm font-medium text-slate-500 border border-emerald-500/20 bg-emerald-500/10">
               <span>✅ Showing Halal Restaurants Only</span>
               <button
                 onClick={handleClearHalal}
@@ -288,13 +329,13 @@ export default function HomePage() {
                 Retry
               </button>
             </div>
-          ) : restaurants.length === 0 ? (
+          ) : filteredRestaurants.length === 0 ? (
             <div className="glass rounded-xl p-8 text-center">
               <p className="text-slate-400">{getEmptyMessage()}</p>
             </div>
           ) : (
             <AnimatePresence mode="popLayout">
-              {restaurants.map((restaurant, index) => (
+              {filteredRestaurants.map((restaurant, index) => (
                 <div
                   key={restaurant.id}
                   ref={restaurant.id === selectedId ? selectedCardRef : null}
@@ -316,18 +357,19 @@ export default function HomePage() {
       </div>
 
       {/* Mobile: Top Search Bar - Fixed at Top */}
-      <div className="md:hidden fixed top-0 left-0 right-0 z-30 bg-slate-950/95 backdrop-blur-sm border-b border-white/10">
+      <div className="md:hidden fixed top-0 left-0 right-0 z-30 bg-pearl/90 backdrop-blur-xl border-b border-white/40 shadow-[0_8px_32px_rgba(0,0,0,0.05)]">
         <div className="p-4">
           <FilterBar 
             filters={filters} 
             onFilterChange={handleFilterChange}
             onNearMeClick={handleNearMeClick}
             view={view}
+            isDrawerOpen={isDrawerOpen}
           />
           
           {/* Halal Filter Badge */}
           {filters.halal && (
-            <div className="mt-3 flex items-center justify-between rounded-xl px-4 py-2 text-sm font-medium text-emerald-400 border border-emerald-500/20 bg-emerald-500/10">
+            <div className="mt-3 flex items-center justify-between rounded-xl px-4 py-2 text-sm font-medium text-slate-500 border border-emerald-500/20 bg-emerald-500/10">
               <span>✅ Showing Halal Restaurants Only</span>
               <button
                 onClick={handleClearHalal}
@@ -364,7 +406,7 @@ export default function HomePage() {
           onFilterChange={handleFilterChange}
           onNearMeClick={handleNearMeClick}
           onClearHalal={handleClearHalal}
-          restaurants={restaurants}
+          restaurants={filteredRestaurants}
           loading={loading}
           error={error}
           selectedId={selectedId}

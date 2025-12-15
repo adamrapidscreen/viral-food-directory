@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { APIProvider, Map, AdvancedMarker, useMap } from '@vis.gl/react-google-maps';
 import { Restaurant, MapMarker } from '@/types';
@@ -88,25 +88,54 @@ export default function MapComponent({
     return userLocation || KUALA_LUMPUR_CENTER;
   }, [center, centerRestaurantId, restaurants, userLocation]);
 
-  // Handle marker click
-  const handleMarkerClick = (id: string) => {
+  // Handle marker click - memoized to prevent re-renders
+  const handleMarkerClick = useCallback((id: string) => {
     onSelectRestaurant(id);
-  };
+  }, [onSelectRestaurant]);
 
-  // Handle map click
-  const handleMapClick = () => {
+  // Handle map click - memoized
+  const handleMapClick = useCallback(() => {
     onSelectRestaurant(null);
-  };
+  }, [onSelectRestaurant]);
 
-  // Handle info window close
-  const handleInfoWindowClose = () => {
+  // Handle info window close - memoized
+  const handleInfoWindowClose = useCallback(() => {
     onSelectRestaurant(null);
-  };
+  }, [onSelectRestaurant]);
 
-  // Handle view details
-  const handleViewDetails = (id: string) => {
+  // Handle view details - memoized
+  const handleViewDetails = useCallback((id: string) => {
     router.push(`/place/${id}`);
-  };
+  }, [router]);
+
+  // Memoize marker hover handlers
+  const handleMarkerHover = useCallback((id: string) => {
+    onHoverRestaurant?.(id);
+  }, [onHoverRestaurant]);
+
+  const handleMarkerHoverEnd = useCallback(() => {
+    onHoverRestaurant?.(null);
+  }, [onHoverRestaurant]);
+
+  // Memoize the marker rendering to prevent unnecessary re-renders
+  // This creates a stable reference for the markers array
+  const renderedMarkers = useMemo(() => {
+    return mapMarkers.map((marker) => {
+      const restaurant = restaurants.find((r) => r.id === marker.id);
+      return (
+        <FoodMarker
+          key={marker.id}
+          place={marker}
+          restaurant={restaurant || null}
+          isSelected={marker.id === selectedId}
+          isHovered={marker.id === hoveredId}
+          onClick={() => handleMarkerClick(marker.id)}
+          onHover={() => handleMarkerHover(marker.id)}
+          onHoverEnd={handleMarkerHoverEnd}
+        />
+      );
+    });
+  }, [mapMarkers, restaurants, selectedId, hoveredId, handleMarkerClick, handleMarkerHover, handleMarkerHoverEnd]);
 
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
 
@@ -156,18 +185,8 @@ export default function MapComponent({
             </AdvancedMarker>
           )}
 
-          {/* Restaurant markers */}
-          {mapMarkers.map((marker) => (
-            <FoodMarker
-              key={marker.id}
-              place={marker}
-              isSelected={marker.id === selectedId}
-              isHovered={marker.id === hoveredId}
-              onClick={() => handleMarkerClick(marker.id)}
-              onHover={() => onHoverRestaurant?.(marker.id)}
-              onHoverEnd={() => onHoverRestaurant?.(null)}
-            />
-          ))}
+          {/* Restaurant markers - memoized rendering */}
+          {renderedMarkers}
 
           {/* Info window for selected restaurant */}
           {selectedRestaurant && (

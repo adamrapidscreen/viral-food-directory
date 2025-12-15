@@ -49,7 +49,7 @@ export default function BottomSheet({
     <Drawer.Root open={open} onOpenChange={onOpenChange} direction="bottom" dismissible={true}>
       <Drawer.Portal>
         <Drawer.Overlay className="fixed inset-0 z-40 bg-black/40" />
-        <Drawer.Content className="fixed bottom-0 left-0 right-0 z-50 flex max-h-[85vh] flex-col rounded-t-3xl bg-slate-950/95 backdrop-blur-sm shadow-2xl">
+        <Drawer.Content className="fixed bottom-0 left-0 right-0 z-50 flex max-h-[85vh] flex-col rounded-t-3xl bg-pearl/90 backdrop-blur-xl border-t border-white/40 shadow-[0_8px_32px_rgba(0,0,0,0.05)]">
           {/* Accessibility: Title and Description (visually hidden but available to screen readers) */}
           <Drawer.Title className="sr-only">Restaurants List</Drawer.Title>
           <Drawer.Description className="sr-only">
@@ -58,7 +58,7 @@ export default function BottomSheet({
 
           {/* Drag Handle */}
           <div className="flex-shrink-0 flex items-center justify-center pt-3 pb-2">
-            <div className="w-12 h-1.5 rounded-full bg-gray-400 dark:bg-gray-600" />
+            <div className="w-12 h-1.5 rounded-full bg-gray-400" />
           </div>
 
           {/* Search Bar Header - Fixed at Top */}

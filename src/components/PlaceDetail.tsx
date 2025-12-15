@@ -225,7 +225,7 @@ export default function PlaceDetail({ restaurant, reviews }: PlaceDetailProps) {
 
         {/* Content Overlay */}
         <div className="absolute bottom-0 left-0 right-0 p-6">
-          <h1 className="text-3xl font-bold text-white">{restaurant.name}</h1>
+          <h1 className="text-3xl font-bold text-white font-serif tracking-tight">{restaurant.name}</h1>
           <p className="mt-1 text-sm text-white/80">{restaurant.address}</p>
 
           {/* Badges Row */}
