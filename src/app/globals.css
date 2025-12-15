@@ -73,10 +73,22 @@ body {
 .scrollbar-hide {
   -ms-overflow-style: none; /* IE and Edge */
   scrollbar-width: none; /* Firefox */
+  -webkit-overflow-scrolling: touch; /* Smooth scroll on iOS */
 }
 
 .scrollbar-hide::-webkit-scrollbar {
   display: none; /* Chrome, Safari, Opera */
+}
+
+/* Force horizontal scroll to work */
+.overflow-x-auto {
+  overflow-x: auto !important;
+  overflow-y: visible !important;
+}
+
+/* Hide scrollbar for filter buttons */
+.filter-buttons-scroll::-webkit-scrollbar {
+  display: none;
 }
 
 /* Custom focus styles */
@@ -155,4 +167,23 @@ body > nextjs-portal:not(script > nextjs-portal) {
   position: relative;
   width: auto;
   height: auto;
+}
+
+/* Remove all focus outlines from inputs */
+input,
+input:focus,
+input:focus-visible,
+input:active {
+  outline: none !important;
+  box-shadow: none !important;
+  ring: none !important;
+}
+
+/* Specifically target the search bar */
+.search-bar,
+.search-bar:focus,
+.search-bar:focus-within {
+  outline: none !important;
+  border: none !important;
+  box-shadow: none !important;
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { FilterState } from '@/types';
 import { useDebounce } from '@/hooks/useDebounce';
 
@@ -17,6 +17,14 @@ const categories = [
   { value: 'cafe', label: 'Cafe', icon: '☕' },
 ] as const;
 
+const filterOptions = [
+  { id: 'nearMe', label: 'Near Me', icon: '📍' },
+  { id: 'openNow', label: 'Open Now', icon: '🕐' },
+  { id: 'restaurant', label: 'Restaurant', icon: '🍽️' },
+  { id: 'cafe', label: 'Cafe', icon: '☕' },
+  { id: 'halal', label: 'Halal Only', icon: '✅' },
+] as const;
+
 export default function FilterBar({ 
   filters, 
   onFilterChange, 
@@ -26,6 +34,8 @@ export default function FilterBar({
 }: FilterBarProps) {
   const [searchValue, setSearchValue] = useState(filters.searchQuery || '');
   const debouncedSearch = useDebounce(searchValue, 300);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Sync searchValue with filters.searchQuery when it changes externally
   useEffect(() => {
@@ -80,11 +90,66 @@ export default function FilterBar({
     onFilterChange({ ...filters, halal: !filters.halal });
   };
 
+  // Get active filters count
+  const activeFilters = [
+    filters.nearMe && 'nearMe',
+    filters.openNow && 'openNow',
+    filters.category && filters.category,
+    filters.halal && 'halal',
+  ].filter(Boolean) as string[];
+
+  // Toggle filter from dropdown
+  const toggleFilter = (filterId: string) => {
+    if (filterId === 'nearMe') {
+      handleNearMeToggle();
+    } else if (filterId === 'openNow') {
+      handleOpenNowToggle();
+    } else if (filterId === 'restaurant' || filterId === 'cafe') {
+      handleCategoryChange(filterId);
+    } else if (filterId === 'halal') {
+      handleHalalToggle();
+    }
+  };
+
+  // Check if filter is active
+  const isFilterActive = (filterId: string): boolean => {
+    if (filterId === 'nearMe') return filters.nearMe;
+    if (filterId === 'openNow') return filters.openNow;
+    if (filterId === 'restaurant' || filterId === 'cafe') return filters.category === filterId;
+    if (filterId === 'halal') return filters.halal;
+    return false;
+  };
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setFiltersOpen(false);
+      }
+    };
+
+    if (filtersOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [filtersOpen]);
+
+  // Clear all filters
+  const handleClearAll = () => {
+    onFilterChange({
+      ...filters,
+      nearMe: false,
+      openNow: false,
+      category: null,
+      halal: false,
+    });
+  };
+
   return (
-    <div className="sticky top-4 z-40 px-4">
+    <div className="w-full">
       {/* Floating Search Bar Island */}
-      <div className="mx-auto max-w-2xl">
-        <div className="glass relative flex items-center rounded-full shadow-xl border border-white/10">
+      <div className="w-full">
+        <div className="glass search-bar relative flex items-center rounded-full shadow-xl border-0 w-full">
           {/* Search Icon - Left */}
           <div className="absolute left-5 pointer-events-none text-slate-400">
             <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -97,8 +162,17 @@ export default function FilterBar({
             type="text"
             value={searchValue}
             onChange={(e) => handleSearchChange(e.target.value)}
-            placeholder="Search nasi lemak, cafe..."
-            className="h-14 w-full rounded-full bg-transparent pl-14 pr-32 text-base text-slate-100 placeholder:text-slate-400 focus:outline-none"
+            placeholder="Search..."
+            className="h-14 rounded-full pl-14 pr-44 text-sm md:text-base text-slate-100 placeholder:text-slate-400 focus:outline-none focus:ring-0 focus:border-0 truncate"
+            style={{
+              flex: 1,
+              minWidth: 0,
+              width: '100%',
+              backgroundColor: 'transparent',
+              outline: 'none',
+              border: 'none',
+              color: 'white',
+            }}
           />
 
           {/* Right Side: Clear Button + Map View Toggle */}
@@ -116,86 +190,113 @@ export default function FilterBar({
               </button>
             )}
 
-            {/* Map View Toggle - Hidden on mobile (use FAB button instead) */}
+            {/* Map View Toggle - Hidden on desktop (both views visible), shown on mobile */}
             {onViewToggle && (
               <button
                 onClick={onViewToggle}
-                className="hidden md:flex h-8 items-center gap-1.5 rounded-full px-3 text-sm font-medium transition-all bg-surface-solid/50 text-slate-300 hover:bg-surface-solid"
+                className="md:hidden h-8 items-center gap-1.5 rounded-full px-3 text-sm font-medium transition-all bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/30 hover:text-emerald-300"
                 aria-label={`Switch to ${view === 'map' ? 'list' : 'map'} view`}
               >
-                <span>{view === 'map' ? '📍' : '📋'}</span>
-                <span className="hidden sm:inline">{view === 'map' ? 'Map' : 'List'}</span>
+                <span className="text-base">{view === 'map' ? '📍' : '📋'}</span>
+                <span className="font-semibold">{view === 'map' ? 'Map' : 'List'}</span>
               </button>
             )}
           </div>
         </div>
 
-        {/* Filter Chips - Below Search Bar */}
-        <div className="mt-4 overflow-x-auto scrollbar-hide" style={{ WebkitOverflowScrolling: 'touch' }}>
-          <div className="flex gap-2 px-2 whitespace-nowrap min-w-max">
-            {/* Near Me */}
-            <button
-              onClick={handleNearMeToggle}
-              className={`flex shrink-0 items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium transition-all duration-200 ${
-                filters.nearMe
-                  ? 'bg-white text-slate-900 shadow-md'
-                  : 'bg-surface-solid/50 text-slate-300 hover:bg-surface-solid'
-              }`}
-              aria-label="Filter by nearby locations"
-              aria-pressed={filters.nearMe}
-            >
-              <span>📍</span>
-              <span>Near Me</span>
-            </button>
-
-            {/* Open Now */}
-            <button
-              onClick={handleOpenNowToggle}
-              className={`flex shrink-0 items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium transition-all duration-200 ${
-                filters.openNow
-                  ? 'bg-white text-slate-900 shadow-md'
-                  : 'bg-surface-solid/50 text-slate-300 hover:bg-surface-solid'
-              }`}
-              aria-label="Filter by open restaurants"
-              aria-pressed={filters.openNow}
-            >
-              <span>🕐</span>
-              <span>Open Now</span>
-            </button>
-
-            {/* Category Filters */}
-            {categories.map((cat) => (
+        {/* Mobile: Horizontal Scrollable Filter Buttons */}
+        <div 
+          className="md:hidden mt-4 pb-3 filter-buttons-scroll"
+          style={{
+            overflowX: 'auto',
+            overflowY: 'visible',
+            WebkitOverflowScrolling: 'touch',
+            msOverflowStyle: 'none',
+            scrollbarWidth: 'none',
+          }}
+        >
+          <div 
+            style={{
+              display: 'flex',
+              gap: '8px',
+              paddingLeft: '16px',
+              paddingRight: '16px',
+              width: 'max-content',
+            }}
+          >
+            {filterOptions.map((filter) => (
               <button
-                key={cat.value}
-                onClick={() => handleCategoryChange(cat.value)}
-                className={`flex shrink-0 items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium transition-all duration-200 ${
-                  filters.category === cat.value
-                    ? 'bg-white text-slate-900 shadow-md'
+                key={filter.id}
+                onClick={() => toggleFilter(filter.id)}
+                className={`flex-shrink-0 whitespace-nowrap px-3 py-1.5 rounded-full text-sm font-medium transition-all duration-200 ${
+                  isFilterActive(filter.id)
+                    ? 'bg-emerald-500 text-white'
                     : 'bg-surface-solid/50 text-slate-300 hover:bg-surface-solid'
                 }`}
-                aria-label={`Filter by ${cat.label}`}
-                aria-pressed={filters.category === cat.value}
+                aria-label={`Filter by ${filter.label}`}
+                aria-pressed={isFilterActive(filter.id)}
               >
-                <span>{cat.icon}</span>
-                <span>{cat.label}</span>
+                <span className="flex items-center gap-1.5">
+                  <span>{filter.icon}</span>
+                  <span>{filter.label}</span>
+                </span>
               </button>
             ))}
-
-            {/* Halal Filter */}
-            <button
-              onClick={handleHalalToggle}
-              className={`flex shrink-0 items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium transition-all duration-200 ${
-                filters.halal
-                  ? 'bg-emerald-500 text-white shadow-md'
-                  : 'bg-surface-solid/50 text-slate-300 hover:bg-surface-solid'
-              }`}
-              aria-label="Filter by halal restaurants"
-              aria-pressed={filters.halal}
-            >
-              <span>✅</span>
-              <span>Halal Only</span>
-            </button>
           </div>
+        </div>
+
+        {/* Desktop: Dropdown Filter Menu */}
+        <div className="hidden md:block px-4 pb-3 relative" ref={dropdownRef}>
+          <button
+            onClick={() => setFiltersOpen(!filtersOpen)}
+            className="flex items-center gap-2 px-4 py-2 bg-surface-solid/50 rounded-full text-slate-300 text-sm hover:bg-surface-solid transition-colors border border-white/20"
+            aria-label="Toggle filters"
+            aria-expanded={filtersOpen}
+          >
+            <span>🔽</span>
+            <span>Filters</span>
+            {activeFilters.length > 0 && (
+              <span className="bg-emerald-500 text-white text-xs px-2 py-0.5 rounded-full">
+                {activeFilters.length}
+              </span>
+            )}
+          </button>
+          
+          {/* Dropdown menu */}
+          {filtersOpen && (
+            <div className="absolute top-full left-4 mt-2 bg-slate-800 rounded-xl shadow-xl border border-slate-700 py-2 z-50 min-w-[200px]">
+              {filterOptions.map((filter) => (
+                <button
+                  key={filter.id}
+                  onClick={() => toggleFilter(filter.id)}
+                  className={`w-full text-left px-4 py-2 hover:bg-slate-700 flex items-center gap-3 transition-colors ${
+                    isFilterActive(filter.id) ? 'text-emerald-400' : 'text-white'
+                  }`}
+                  aria-label={`Toggle ${filter.label} filter`}
+                  aria-pressed={isFilterActive(filter.id)}
+                >
+                  <span>{filter.icon}</span>
+                  <span>{filter.label}</span>
+                  {isFilterActive(filter.id) && (
+                    <span className="ml-auto">✓</span>
+                  )}
+                </button>
+              ))}
+              
+              {activeFilters.length > 0 && (
+                <>
+                  <div className="border-t border-slate-700 my-2" />
+                  <button
+                    onClick={handleClearAll}
+                    className="w-full text-left px-4 py-2 text-red-400 hover:bg-slate-700 transition-colors"
+                    aria-label="Clear all filters"
+                  >
+                    Clear All
+                  </button>
+                </>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>

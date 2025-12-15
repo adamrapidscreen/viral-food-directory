@@ -152,8 +152,12 @@ export async function GET(req: NextRequest) {
       console.log('After priceRange filter:', restaurants.length);
     }
     if (openNow) {
-      // Only show restaurants that are explicitly open (true), exclude closed (false) and unknown (null)
-      restaurants = restaurants.filter((r: any) => isOpenNow(r.operating_hours || {}) === true);
+      // Include restaurants that are explicitly open (true) OR have unknown hours status (null)
+      // Only exclude restaurants that are explicitly closed (false)
+      restaurants = restaurants.filter((r: any) => {
+        const status = isOpenNow(r.operating_hours || {});
+        return status === true || status === null; // Include open OR unknown
+      });
       console.log('After openNow filter:', restaurants.length);
     }
     if (search) {

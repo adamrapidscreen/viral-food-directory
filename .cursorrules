@@ -58,3 +58,4 @@ src/
 │   └── index.ts
 └── hooks/
     └── useGeolocation.ts
+m run discovery

@@ -6,14 +6,14 @@ import { useGeolocation } from '@/hooks/useGeolocation';
 import { useDebounce } from '@/hooks/useDebounce';
 import { useToast } from '@/contexts/ToastContext';
 import { AnimatePresence } from 'framer-motion';
+import { List } from 'lucide-react';
 import Map from '@/components/Map';
 import MapModal from '@/components/MapModal';
 import RestaurantCard from '@/components/RestaurantCard';
 import RestaurantCardSkeleton from '@/components/RestaurantCardSkeleton';
 import FilterBar from '@/components/FilterBar';
-import EditorsPicks from '@/components/EditorsPicks';
-import TrendingDishes from '@/components/TrendingDishes';
 import BottomNav from '@/components/BottomNav';
+import BottomSheet from '@/components/BottomSheet';
 
 const DEFAULT_FILTERS: FilterState = {
   nearMe: false,
@@ -36,6 +36,7 @@ export default function HomePage() {
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<'map' | 'list'>('map');
   const [isMapModalOpen, setIsMapModalOpen] = useState(false);
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [mapCenter, setMapCenter] = useState<{ lat: number; lng: number }>({ lat: 3.139, lng: 101.6869 });
 
@@ -135,6 +136,11 @@ export default function HomePage() {
   // Handle card click
   const handleCardClick = (id: string) => {
     setSelectedId(id);
+    // Fly map to restaurant location
+    const restaurant = restaurants.find((r) => r.id === id);
+    if (restaurant) {
+      setMapCenter({ lat: restaurant.lat, lng: restaurant.lng });
+    }
     if (view === 'list') {
       // Scroll will be handled by useEffect
     }
@@ -217,256 +223,158 @@ export default function HomePage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 pt-6">
-      {/* FilterBar - Floating Island */}
-      <FilterBar 
-        filters={filters} 
-        onFilterChange={handleFilterChange}
-        onNearMeClick={handleNearMeClick}
-        view={view}
-        onViewToggle={() => setView(view === 'map' ? 'list' : 'map')}
-      />
-      
-      {/* Halal Filter Badge */}
-      {filters.halal && (
-        <div className="glass mx-auto mt-4 max-w-2xl flex items-center justify-between rounded-xl px-4 py-2 text-sm font-medium text-emerald-400 border border-emerald-500/20 bg-emerald-500/10">
-          <span>✅ Showing Halal Restaurants Only</span>
-          <button
-            onClick={handleClearHalal}
-            className="rounded-xl p-1 hover:bg-emerald-500/20"
-            aria-label="Clear halal filter"
-          >
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+    <div className="relative h-screen overflow-hidden bg-slate-950">
+      {/* Map - Absolute Background Layer */}
+      <div className="absolute inset-0 w-full h-full" style={{ pointerEvents: 'auto' }}>
+        <Map
+          restaurants={restaurants}
+          selectedId={selectedId}
+          hoveredId={hoveredId}
+          onSelectRestaurant={handleMarkerClick}
+          onHoverRestaurant={handleMarkerHover}
+          userLocation={userLocationForMap}
+          centerRestaurantId={selectedId}
+          center={mapCenter}
+        />
+      </div>
+
+      {/* Desktop: Floating Sidebar */}
+      <div className="hidden md:flex absolute left-0 top-0 h-full md:w-[320px] lg:w-[360px] flex-shrink-0 z-10 bg-slate-950/95 backdrop-blur-sm shadow-xl rounded-r-2xl flex-col" style={{ overflowY: 'hidden', overflowX: 'visible' }}>
+        {/* Search Bar Header - Fixed at Top */}
+        <div className="flex-shrink-0 p-4 border-b border-white/10">
+          <FilterBar 
+            filters={filters} 
+            onFilterChange={handleFilterChange}
+            onNearMeClick={handleNearMeClick}
+            view={view}
+            onViewToggle={() => setView(view === 'map' ? 'list' : 'map')}
+          />
+          
+          {/* Halal Filter Badge */}
+          {filters.halal && (
+            <div className="mt-4 flex items-center justify-between rounded-xl px-4 py-2 text-sm font-medium text-emerald-400 border border-emerald-500/20 bg-emerald-500/10">
+              <span>✅ Showing Halal Restaurants Only</span>
+              <button
+                onClick={handleClearHalal}
+                className="rounded-xl p-1 hover:bg-emerald-500/20"
+                aria-label="Clear halal filter"
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          )}
         </div>
+
+        {/* Food List - Scrollable Area */}
+        <div 
+          ref={listContainerRef}
+          className="flex-1 overflow-y-auto px-4 py-4 space-y-4"
+        >
+          {loading ? (
+            <div className="space-y-4">
+              {[1, 2, 3, 4, 5].map((i) => (
+                <RestaurantCardSkeleton key={i} />
+              ))}
+            </div>
+          ) : error ? (
+            <div className="glass rounded-xl p-6 text-center border border-red-500/20 bg-red-500/10">
+              <p className="mb-4 text-red-400">{error}</p>
+              <button
+                onClick={() => window.location.reload()}
+                className="rounded-xl bg-emerald-500 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-600"
+              >
+                Retry
+              </button>
+            </div>
+          ) : restaurants.length === 0 ? (
+            <div className="glass rounded-xl p-8 text-center">
+              <p className="text-slate-400">{getEmptyMessage()}</p>
+            </div>
+          ) : (
+            <AnimatePresence mode="popLayout">
+              {restaurants.map((restaurant, index) => (
+                <div
+                  key={restaurant.id}
+                  ref={restaurant.id === selectedId ? selectedCardRef : null}
+                  onMouseEnter={() => handleCardHover(restaurant.id)}
+                  onMouseLeave={() => handleCardHover(null)}
+                >
+                  <RestaurantCard
+                    restaurant={restaurant}
+                    isSelected={restaurant.id === selectedId}
+                    isHovered={restaurant.id === hoveredId}
+                    onClick={() => handleCardClick(restaurant.id)}
+                    index={index}
+                  />
+                </div>
+              ))}
+            </AnimatePresence>
+          )}
+        </div>
+      </div>
+
+      {/* Mobile: Top Search Bar - Fixed at Top */}
+      <div className="md:hidden fixed top-0 left-0 right-0 z-30 bg-slate-950/95 backdrop-blur-sm border-b border-white/10">
+        <div className="p-4">
+          <FilterBar 
+            filters={filters} 
+            onFilterChange={handleFilterChange}
+            onNearMeClick={handleNearMeClick}
+            view={view}
+          />
+          
+          {/* Halal Filter Badge */}
+          {filters.halal && (
+            <div className="mt-3 flex items-center justify-between rounded-xl px-4 py-2 text-sm font-medium text-emerald-400 border border-emerald-500/20 bg-emerald-500/10">
+              <span>✅ Showing Halal Restaurants Only</span>
+              <button
+                onClick={handleClearHalal}
+                className="rounded-xl p-1 hover:bg-emerald-500/20"
+                aria-label="Clear halal filter"
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Mobile: Floating Button - Opens Drawer */}
+      {!isDrawerOpen && (
+        <button
+          onClick={() => setIsDrawerOpen(true)}
+          className="md:hidden fixed bottom-20 left-1/2 z-30 -translate-x-1/2 flex items-center gap-2 rounded-full bg-emerald-500 px-6 py-3 text-white shadow-xl transition-all hover:bg-emerald-600 active:scale-95"
+          aria-label="View restaurants list"
+        >
+          <List className="h-5 w-5" />
+          <span className="font-semibold">View List</span>
+        </button>
       )}
 
-      {/* EDITOR'S PICKS - TOP PRIORITY */}
-      <section className="py-6">
-        <div className="px-4 mb-4">
-          <h2 className="text-2xl font-bold text-white flex items-center gap-2">
-            🏆 Editor&apos;s Picks
-          </h2>
-          <p className="text-slate-400 text-sm">
-            Top-rated on both Google & TripAdvisor
-          </p>
-        </div>
-        <EditorsPicks />
-      </section>
-
-      {/* Trending Dishes */}
-      <TrendingDishes />
-
-      {/* Main Content */}
-      <div className="mx-auto max-w-7xl px-4 pt-4 pb-20 md:px-6 md:pb-4">
-        {/* Mobile Layout */}
-        <div className="md:hidden">
-          {/* Mobile: Always show list view, map is in modal */}
-          <div
-            ref={listContainerRef}
-            className="space-y-4"
-          >
-              {loading ? (
-                <div className="space-y-4">
-                  {[1, 2, 3, 4, 5].map((i) => (
-                    <RestaurantCardSkeleton key={i} />
-                  ))}
-                </div>
-              ) : error ? (
-                <div className="glass rounded-xl p-6 text-center border border-red-500/20 bg-red-500/10">
-                  <p className="mb-4 text-red-400">{error}</p>
-                  <button
-                    onClick={() => window.location.reload()}
-                    className="rounded-xl bg-emerald-500 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-600"
-                  >
-                    Retry
-                  </button>
-                </div>
-              ) : restaurants.length === 0 ? (
-                <div className="glass rounded-xl p-8 text-center">
-                  <p className="text-slate-400">{getEmptyMessage()}</p>
-                </div>
-              ) : (
-                <AnimatePresence mode="popLayout">
-                  {restaurants.map((restaurant, index) => (
-                    <div
-                      key={restaurant.id}
-                      ref={restaurant.id === selectedId ? selectedCardRef : null}
-                      onMouseEnter={() => handleCardHover(restaurant.id)}
-                      onMouseLeave={() => handleCardHover(null)}
-                    >
-                      <RestaurantCard
-                        restaurant={restaurant}
-                        isSelected={restaurant.id === selectedId}
-                        isHovered={restaurant.id === hoveredId}
-                        onClick={() => handleCardClick(restaurant.id)}
-                        index={index}
-                      />
-                    </div>
-                  ))}
-                </AnimatePresence>
-              )}
-          </div>
-
-          {/* Map FAB Button - Floating Action Button */}
-          <button
-            onClick={() => setIsMapModalOpen(true)}
-            className="fixed bottom-24 left-1/2 z-40 -translate-x-1/2 flex items-center gap-2 rounded-full bg-emerald-500 px-6 py-3 text-white shadow-xl transition-all hover:bg-emerald-600 active:scale-95"
-            aria-label="Open map"
-          >
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-            <span className="font-semibold">Map</span>
-          </button>
-
-          {/* Map Modal */}
-          <MapModal
-            isOpen={isMapModalOpen}
-            onClose={() => setIsMapModalOpen(false)}
-            restaurants={restaurants}
-            selectedId={selectedId}
-            hoveredId={hoveredId}
-            onSelectRestaurant={handleMarkerClick}
-            onHoverRestaurant={handleMarkerHover}
-            userLocation={userLocationForMap}
-            centerRestaurantId={selectedId}
-            center={mapCenter}
-          />
-        </div>
-
-        {/* Desktop Layout - Sticky Split View for lg screens */}
-        <div className="hidden lg:flex lg:gap-6 lg:pt-6 lg:px-0">
-          {/* Left: Scrollable Grid of Food Cards (60%) */}
-          <div className="flex-1 lg:w-[60%]">
-            <div
-              ref={listContainerRef}
-              className="h-[calc(100vh-200px)] space-y-4 overflow-y-auto pr-2"
-            >
-            {loading ? (
-              <div className="space-y-4">
-                {[1, 2, 3, 4, 5].map((i) => (
-                  <RestaurantCardSkeleton key={i} />
-                ))}
-              </div>
-            ) : error ? (
-              <div className="glass rounded-xl p-6 text-center border border-red-500/20 bg-red-500/10">
-                <p className="mb-4 text-red-400">{error}</p>
-                <button
-                  onClick={() => window.location.reload()}
-                  className="rounded-xl bg-emerald-500 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-600"
-                >
-                  Retry
-                </button>
-              </div>
-            ) : restaurants.length === 0 ? (
-              <div className="glass rounded-xl p-8 text-center">
-                <p className="text-slate-400">{getEmptyMessage()}</p>
-              </div>
-            ) : (
-              <AnimatePresence mode="popLayout">
-                {restaurants.map((restaurant, index) => (
-                  <div
-                    key={restaurant.id}
-                    ref={restaurant.id === selectedId ? selectedCardRef : null}
-                    onMouseEnter={() => handleCardHover(restaurant.id)}
-                    onMouseLeave={() => handleCardHover(null)}
-                  >
-                    <RestaurantCard
-                      restaurant={restaurant}
-                      isSelected={restaurant.id === selectedId}
-                      isHovered={restaurant.id === hoveredId}
-                      onClick={() => handleCardClick(restaurant.id)}
-                      index={index}
-                    />
-                  </div>
-                ))}
-              </AnimatePresence>
-            )}
-            </div>
-          </div>
-
-          {/* Right: Sticky Map (40%) */}
-          <div className="sticky top-4 h-[calc(100vh-100px)] w-[40%] rounded-2xl overflow-hidden">
-            <Map
-              restaurants={restaurants}
-              selectedId={selectedId}
-              hoveredId={hoveredId}
-              onSelectRestaurant={handleMarkerClick}
-              onHoverRestaurant={handleMarkerHover}
-              userLocation={userLocationForMap}
-              centerRestaurantId={selectedId}
-              center={mapCenter}
-            />
-          </div>
-        </div>
-
-        {/* Desktop Layout - Original for md screens (tablets) */}
-        <div className="hidden md:grid md:grid-cols-[60%_40%] md:gap-6 md:py-6 lg:hidden">
-          {/* Map */}
-          <div className="relative h-[calc(100vh-300px)] rounded-2xl overflow-hidden">
-            <Map
-              restaurants={restaurants}
-              selectedId={selectedId}
-              hoveredId={hoveredId}
-              onSelectRestaurant={handleMarkerClick}
-              onHoverRestaurant={handleMarkerHover}
-              userLocation={userLocationForMap}
-              centerRestaurantId={selectedId}
-              center={mapCenter}
-            />
-          </div>
-
-          {/* List */}
-          <div
-            ref={listContainerRef}
-            className="h-[calc(100vh-300px)] space-y-4 overflow-y-auto pr-2"
-          >
-            {loading ? (
-              <div className="space-y-4">
-                {[1, 2, 3, 4, 5].map((i) => (
-                  <RestaurantCardSkeleton key={i} />
-                ))}
-              </div>
-            ) : error ? (
-              <div className="glass rounded-xl p-6 text-center border border-red-500/20 bg-red-500/10">
-                <p className="mb-4 text-red-400">{error}</p>
-                <button
-                  onClick={() => window.location.reload()}
-                  className="rounded-xl bg-emerald-500 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-600"
-                >
-                  Retry
-                </button>
-              </div>
-            ) : restaurants.length === 0 ? (
-              <div className="glass rounded-xl p-8 text-center">
-                <p className="text-slate-400">{getEmptyMessage()}</p>
-              </div>
-            ) : (
-              <AnimatePresence mode="popLayout">
-                {restaurants.map((restaurant, index) => (
-                  <div
-                    key={restaurant.id}
-                    ref={restaurant.id === selectedId ? selectedCardRef : null}
-                    onMouseEnter={() => handleCardHover(restaurant.id)}
-                    onMouseLeave={() => handleCardHover(null)}
-                  >
-                    <RestaurantCard
-                      restaurant={restaurant}
-                      isSelected={restaurant.id === selectedId}
-                      isHovered={restaurant.id === hoveredId}
-                      onClick={() => handleCardClick(restaurant.id)}
-                      index={index}
-                    />
-                  </div>
-                ))}
-              </AnimatePresence>
-            )}
-          </div>
-        </div>
+      {/* Mobile: Bottom Sheet Drawer */}
+      <div className="md:hidden">
+        <BottomSheet
+          open={isDrawerOpen}
+          onOpenChange={setIsDrawerOpen}
+          filters={filters}
+          onFilterChange={handleFilterChange}
+          onNearMeClick={handleNearMeClick}
+          onClearHalal={handleClearHalal}
+          restaurants={restaurants}
+          loading={loading}
+          error={error}
+          selectedId={selectedId}
+          hoveredId={hoveredId}
+          onCardClick={handleCardClick}
+          onCardHover={handleCardHover}
+          getEmptyMessage={getEmptyMessage}
+          listContainerRef={listContainerRef}
+          selectedCardRef={selectedCardRef}
+        />
       </div>
 
       {/* Bottom Navigation Bar - Mobile Only */}
