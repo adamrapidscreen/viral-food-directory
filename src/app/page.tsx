@@ -200,10 +200,10 @@ export default function HomePage() {
     }
   };
 
-  // Handle marker hover
-  const handleMarkerHover = (id: string | null) => {
+  // Handle marker hover - memoized to prevent unnecessary re-renders
+  const handleMarkerHover = useCallback((id: string | null) => {
     setHoveredId(id);
-  };
+  }, []);
 
   // Handle "Near Me" click - toggle filter and request geolocation if turning ON
   const handleNearMeClick = useCallback(() => {

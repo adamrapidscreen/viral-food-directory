@@ -2,10 +2,10 @@
 
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { APIProvider, Map, AdvancedMarker, useMap } from '@vis.gl/react-google-maps';
+import { APIProvider, Map as GoogleMap, AdvancedMarker, useMap } from '@vis.gl/react-google-maps';
 import { Restaurant, MapMarker } from '@/types';
 import FoodMarker from './FoodMarker';
-import MarkerInfoWindow from './MarkerInfoWindow';
+import MarkerPopup from './MarkerPopup';
 
 interface MapProps {
   restaurants: Restaurant[];
@@ -117,8 +117,25 @@ export default function MapComponent({
     onHoverRestaurant?.(null);
   }, [onHoverRestaurant]);
 
+  // Create stable callback maps to avoid creating new functions on every render
+  const clickHandlers = useMemo(() => {
+    const handlers = new Map<string, () => void>();
+    mapMarkers.forEach((marker) => {
+      handlers.set(marker.id, () => handleMarkerClick(marker.id));
+    });
+    return handlers;
+  }, [mapMarkers, handleMarkerClick]);
+
+  const hoverHandlers = useMemo(() => {
+    const handlers = new Map<string, () => void>();
+    mapMarkers.forEach((marker) => {
+      handlers.set(marker.id, () => handleMarkerHover(marker.id));
+    });
+    return handlers;
+  }, [mapMarkers, handleMarkerHover]);
+
   // Memoize the marker rendering to prevent unnecessary re-renders
-  // This creates a stable reference for the markers array
+  // Use stable callback references from the maps
   const renderedMarkers = useMemo(() => {
     return mapMarkers.map((marker) => {
       const restaurant = restaurants.find((r) => r.id === marker.id);
@@ -129,13 +146,13 @@ export default function MapComponent({
           restaurant={restaurant || null}
           isSelected={marker.id === selectedId}
           isHovered={marker.id === hoveredId}
-          onClick={() => handleMarkerClick(marker.id)}
-          onHover={() => handleMarkerHover(marker.id)}
+          onClick={clickHandlers.get(marker.id)!}
+          onHover={hoverHandlers.get(marker.id)!}
           onHoverEnd={handleMarkerHoverEnd}
         />
       );
     });
-  }, [mapMarkers, restaurants, selectedId, hoveredId, handleMarkerClick, handleMarkerHover, handleMarkerHoverEnd]);
+  }, [mapMarkers, restaurants, selectedId, hoveredId, clickHandlers, hoverHandlers, handleMarkerHoverEnd]);
 
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
 
@@ -159,7 +176,7 @@ export default function MapComponent({
       )}
 
       <APIProvider apiKey={apiKey}>
-        <Map
+        <GoogleMap
           defaultCenter={initialCenter}
           defaultZoom={centerRestaurantId ? 16 : DEFAULT_ZOOM}
           mapId="viral-food-map"
@@ -188,15 +205,15 @@ export default function MapComponent({
           {/* Restaurant markers - memoized rendering */}
           {renderedMarkers}
 
-          {/* Info window for selected restaurant */}
+          {/* Custom popup for selected restaurant - must be inside GoogleMap for useMap hook */}
           {selectedRestaurant && (
-            <MarkerInfoWindow
+            <MarkerPopup
               restaurant={selectedRestaurant}
               onClose={handleInfoWindowClose}
               onViewDetails={handleViewDetails}
             />
           )}
-        </Map>
+        </GoogleMap>
       </APIProvider>
     </div>
   );
